@@ -2,74 +2,346 @@
    WOGE LEDGER
    WORD OF GOD ENTERPRISES
 
-   DAILY BANK / WORKSHOP LEDGER
+   COMPLETE APP.JS
+   Version 3.0
 
-   BALANCE:
-   OPENING + CREDITS - EXPENSES = CLOSING
+   FEATURES
+   ---------------------------------------------------------
+   • Multiple bank accounts
+   • Opening balance
+   • Daily ledgers
+   • Credit transactions
+   • Expense transactions
+   • Automatic closing balance
+   • Automatic next-day opening balance
+   • Continuous transaction entry
+   • Edit / delete transactions
+   • Monthly summary
+   • Date / month filtering
+   • Professional gold & black printing
+   • Backup / restore
+   • Existing WOGE_LEDGER_V2 data compatible
+========================================================= */
+
+
+/* =========================================================
+   STORAGE
 ========================================================= */
 
 const STORAGE_KEY = "WOGE_LEDGER_V2";
 
+
 /* =========================================================
-   HELPERS
+   ID
 ========================================================= */
 
 function createId() {
-  if (window.crypto && crypto.randomUUID) {
-    return crypto.randomUUID();
+
+  if (
+    window.crypto &&
+    typeof window.crypto.randomUUID === "function"
+  ) {
+    return window.crypto.randomUUID();
   }
 
-  return Date.now().toString(36) +
-    Math.random().toString(36).substring(2);
+  return (
+    Date.now().toString(36) +
+    Math.random().toString(36).substring(2)
+  );
 }
+
+
+/* =========================================================
+   DEFAULT DATA
+========================================================= */
+
+const defaultData = {
+
+  accounts: [
+    {
+      id: createId(),
+      name: "SBI",
+      opening: 46000,
+      ledgers: []
+    }
+  ],
+
+  selectedAccount: null
+
+};
+
+
+/* =========================================================
+   LOAD DATA
+========================================================= */
+
+function loadData() {
+
+  try {
+
+    const saved =
+      localStorage.getItem(STORAGE_KEY);
+
+    if (saved) {
+
+      const parsed =
+        JSON.parse(saved);
+
+      if (
+        parsed &&
+        Array.isArray(parsed.accounts)
+      ) {
+
+        return normalizeData(parsed);
+
+      }
+
+    }
+
+  }
+  catch (error) {
+
+    console.error(
+      "WOGE Ledger load error:",
+      error
+    );
+
+  }
+
+  return normalizeData(
+    JSON.parse(
+      JSON.stringify(defaultData)
+    )
+  );
+}
+
+
+/* =========================================================
+   NORMALIZE DATA
+========================================================= */
+
+function normalizeData(input) {
+
+  const result =
+    input || {};
+
+  if (!Array.isArray(result.accounts)) {
+    result.accounts = [];
+  }
+
+  result.accounts =
+    result.accounts.map(account => {
+
+      if (!account.id) {
+        account.id = createId();
+      }
+
+      if (!account.name) {
+        account.name = "Bank Account";
+      }
+
+      account.opening =
+        Number(account.opening) || 0;
+
+      if (!Array.isArray(account.ledgers)) {
+        account.ledgers = [];
+      }
+
+      account.ledgers =
+        account.ledgers.map(ledger => {
+
+          if (!ledger.id) {
+            ledger.id = createId();
+          }
+
+          if (!ledger.date) {
+            ledger.date = today();
+          }
+
+          ledger.opening =
+            Number(ledger.opening) || 0;
+
+          if (!Array.isArray(ledger.transactions)) {
+            ledger.transactions = [];
+          }
+
+          ledger.transactions =
+            ledger.transactions.map(transaction => {
+
+              if (!transaction.id) {
+                transaction.id = createId();
+              }
+
+              if (
+                transaction.type !== "credit" &&
+                transaction.type !== "expense"
+              ) {
+                transaction.type = "expense";
+              }
+
+              transaction.amount =
+                Number(transaction.amount) || 0;
+
+              transaction.description =
+                transaction.description || "";
+
+              return transaction;
+
+            });
+
+          return ledger;
+
+        });
+
+      return account;
+
+    });
+
+  if (!result.selectedAccount) {
+
+    result.selectedAccount =
+      result.accounts[0]?.id || null;
+
+  }
+
+  return result;
+}
+
+
+/* =========================================================
+   SAVE DATA
+========================================================= */
+
+let data = loadData();
+
+function saveData() {
+
+  try {
+
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(data)
+    );
+
+  }
+  catch (error) {
+
+    console.error(
+      "WOGE Ledger save error:",
+      error
+    );
+
+    alert(
+      "Could not save data in this browser."
+    );
+
+  }
+
+}
+
+
+/* =========================================================
+   BASIC HELPERS
+========================================================= */
 
 function money(value) {
-  return "₹" + Number(value || 0).toLocaleString("en-IN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
+
+  return (
+    "₹" +
+    Number(value || 0).toLocaleString(
+      "en-IN",
+      {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }
+    )
+  );
+
 }
+
 
 function today() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
 
-  return `${y}-${m}-${day}`;
+  const d = new Date();
+
+  const year =
+    d.getFullYear();
+
+  const month =
+    String(
+      d.getMonth() + 1
+    ).padStart(2, "0");
+
+  const day =
+    String(
+      d.getDate()
+    ).padStart(2, "0");
+
+  return (
+    year +
+    "-" +
+    month +
+    "-" +
+    day
+  );
+
 }
+
 
 function currentMonth() {
+
   return today().substring(0, 7);
+
 }
 
+
 function escapeHTML(text) {
+
   return String(text ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+
 }
+
 
 function formatDate(date) {
+
   if (!date) return "";
 
-  const p = date.split("-");
+  const parts =
+    date.split("-");
 
-  if (p.length !== 3) return date;
+  if (parts.length !== 3) {
+    return date;
+  }
 
-  return `${p[2]}/${p[1]}/${p[0]}`;
+  return (
+    parts[2] +
+    "/" +
+    parts[1] +
+    "/" +
+    parts[0]
+  );
+
 }
 
+
 function formatMonth(month) {
+
   if (!month) return "";
 
-  const p = month.split("-");
+  const parts =
+    month.split("-");
 
-  if (p.length !== 2) return month;
+  if (parts.length !== 2) {
+    return month;
+  }
 
   const names = [
+
     "January",
     "February",
     "March",
@@ -82,159 +354,206 @@ function formatMonth(month) {
     "October",
     "November",
     "December"
+
   ];
 
-  return `${names[Number(p[1]) - 1]} ${p[0]}`;
+  const index =
+    Number(parts[1]) - 1;
+
+  return (
+    (names[index] || "") +
+    " " +
+    parts[0]
+  );
+
 }
 
-/* =========================================================
-   DEFAULT DATA
-========================================================= */
-
-const defaultData = {
-  accounts: [
-    {
-      id: "sbi-default",
-      name: "SBI",
-      opening: 46000,
-      ledgers: []
-    }
-  ],
-  selectedAccount: "sbi-default"
-};
 
 /* =========================================================
-   STORAGE
-========================================================= */
-
-function loadData() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-
-    if (!saved) {
-      return JSON.parse(JSON.stringify(defaultData));
-    }
-
-    const parsed = JSON.parse(saved);
-
-    if (!Array.isArray(parsed.accounts)) {
-      return JSON.parse(JSON.stringify(defaultData));
-    }
-
-    parsed.accounts.forEach(account => {
-      if (!Array.isArray(account.ledgers)) {
-        account.ledgers = [];
-      }
-
-      if (typeof account.opening !== "number") {
-        account.opening = Number(account.opening) || 0;
-      }
-
-      account.ledgers.forEach(ledger => {
-        if (!Array.isArray(ledger.transactions)) {
-          ledger.transactions = [];
-        }
-
-        if (typeof ledger.opening !== "number") {
-          ledger.opening = Number(ledger.opening) || 0;
-        }
-      });
-    });
-
-    if (!parsed.selectedAccount && parsed.accounts.length) {
-      parsed.selectedAccount = parsed.accounts[0].id;
-    }
-
-    return parsed;
-  } catch (error) {
-    console.error("WOGE Ledger load error:", error);
-
-    return JSON.parse(JSON.stringify(defaultData));
-  }
-}
-
-function saveData() {
-  try {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(data)
-    );
-  } catch (error) {
-    console.error("WOGE Ledger save error:", error);
-  }
-}
-
-let data = loadData();
-
-/* =========================================================
-   ACCOUNT HELPERS
+   ACCOUNT
 ========================================================= */
 
 function currentAccount() {
-  if (!data.accounts.length) {
-    return null;
-  }
 
-  let account = data.accounts.find(
-    item => item.id === data.selectedAccount
+  return (
+    data.accounts.find(
+      account =>
+        account.id ===
+        data.selectedAccount
+    ) ||
+    data.accounts[0] ||
+    null
   );
 
-  if (!account) {
-    account = data.accounts[0];
-    data.selectedAccount = account.id;
-    saveData();
-  }
-
-  return account;
 }
 
-function getAccount(id) {
+
+function findAccount(accountId) {
+
   return data.accounts.find(
-    account => account.id === id
+    account =>
+      account.id === accountId
   ) || null;
+
 }
+
+
+function findLedger(account, ledgerId) {
+
+  if (!account) return null;
+
+  return (
+    account.ledgers.find(
+      ledger =>
+        ledger.id === ledgerId
+    ) || null
+  );
+
+}
+
 
 /* =========================================================
-   LEDGER HELPERS
+   ACCOUNT SELECTS
+========================================================= */
+
+function renderAllAccountSelects() {
+
+  const ids = [
+
+    "dashboardAccount",
+    "dailyAccount",
+    "monthlyAccount",
+    "ledgerAccount"
+
+  ];
+
+  ids.forEach(id => {
+
+    const select =
+      document.getElementById(id);
+
+    if (!select) return;
+
+    const oldValue =
+      select.value;
+
+    select.innerHTML = "";
+
+    data.accounts.forEach(account => {
+
+      const option =
+        document.createElement("option");
+
+      option.value =
+        account.id;
+
+      option.textContent =
+        account.name;
+
+      select.appendChild(option);
+
+    });
+
+    const account =
+      currentAccount();
+
+    if (account) {
+
+      select.value =
+        data.accounts.some(
+          a => a.id === oldValue
+        )
+          ? oldValue
+          : account.id;
+
+    }
+
+  });
+
+}
+
+
+/* =========================================================
+   ACCOUNT CHANGE
+========================================================= */
+
+function changeAccountFromDashboard() {
+
+  const select =
+    document.getElementById(
+      "dashboardAccount"
+    );
+
+  if (!select) return;
+
+  data.selectedAccount =
+    select.value;
+
+  saveData();
+
+  renderAll();
+
+}
+
+
+function syncAccountSelects() {
+
+  renderAllAccountSelects();
+
+}
+
+
+/* =========================================================
+   LEDGER SORTING
 ========================================================= */
 
 function sortLedgers(account) {
+
   if (!account) return [];
 
-  return [...(account.ledgers || [])].sort(
-    (a, b) => a.date.localeCompare(b.date)
+  return [
+    ...(account.ledgers || [])
+  ].sort(
+    (a, b) =>
+      a.date.localeCompare(b.date)
   );
+
 }
 
-function findLedger(account, ledgerId) {
-  if (!account) return null;
 
-  return (account.ledgers || []).find(
-    ledger => ledger.id === ledgerId
-  ) || null;
-}
-
-function getMonthLedgers(account, month) {
-  return sortLedgers(account).filter(
-    ledger => ledger.date.startsWith(month)
-  );
-}
+/* =========================================================
+   LEDGER TOTALS
+========================================================= */
 
 function ledgerTotals(ledger) {
+
   let credits = 0;
   let expenses = 0;
 
-  (ledger.transactions || []).forEach(transaction => {
-    const amount = Number(transaction.amount) || 0;
+  (
+    ledger?.transactions || []
+  ).forEach(transaction => {
 
-    if (transaction.type === "credit") {
+    const amount =
+      Number(transaction.amount) || 0;
+
+    if (
+      transaction.type === "credit"
+    ) {
+
       credits += amount;
-    } else {
-      expenses += amount;
+
     }
+    else {
+
+      expenses += amount;
+
+    }
+
   });
 
-  const opening = Number(ledger.opening) || 0;
+  const opening =
+    Number(ledger?.opening) || 0;
 
   const closing =
     opening +
@@ -242,107 +561,88 @@ function ledgerTotals(ledger) {
     expenses;
 
   return {
+
     opening,
     credits,
     expenses,
     closing
+
   };
+
 }
 
+
 /* =========================================================
-   AUTOMATIC OPENING BALANCES
+   RECALCULATE OPENINGS
 ========================================================= */
 
 function recalculateOpenings(account) {
+
   if (!account) return;
 
-  const ledgers = sortLedgers(account);
+  const ledgers =
+    sortLedgers(account);
 
   let runningBalance =
     Number(account.opening) || 0;
 
   ledgers.forEach(ledger => {
-    ledger.opening = runningBalance;
 
-    const totals = ledgerTotals(ledger);
+    ledger.opening =
+      runningBalance;
 
-    runningBalance = totals.closing;
+    const totals =
+      ledgerTotals(ledger);
+
+    runningBalance =
+      totals.closing;
+
   });
 
-  saveData();
 }
+
 
 /* =========================================================
-   ACCOUNT SELECTS
+   MONTH LEDGERS
 ========================================================= */
 
-function renderAllAccountSelects() {
-  const ids = [
-    "dashboardAccount",
-    "dailyAccount",
-    "monthlyAccount",
-    "ledgerAccount"
-  ];
+function getMonthLedgers(
+  account,
+  month
+) {
 
-  ids.forEach(id => {
-    const select = document.getElementById(id);
+  if (!account) return [];
 
-    if (!select) return;
+  return sortLedgers(account)
+    .filter(
+      ledger =>
+        ledger.date.startsWith(month)
+    );
 
-    const previous = select.value;
-
-    select.innerHTML = "";
-
-    data.accounts.forEach(account => {
-      const option = document.createElement("option");
-
-      option.value = account.id;
-      option.textContent = account.name;
-
-      select.appendChild(option);
-    });
-
-    const active =
-      getAccount(data.selectedAccount) ||
-      data.accounts[0];
-
-    if (active) {
-      select.value = active.id;
-    } else if (previous) {
-      select.value = previous;
-    }
-  });
 }
 
-function changeAccountFromDashboard() {
-  const select =
-    document.getElementById("dashboardAccount");
-
-  if (!select) return;
-
-  data.selectedAccount = select.value;
-
-  saveData();
-
-  renderAll();
-}
 
 /* =========================================================
    DASHBOARD
 ========================================================= */
 
 function renderDashboard() {
+
   renderAllAccountSelects();
 
-  const account = currentAccount();
+  const account =
+    currentAccount();
 
   if (!account) return;
 
   const monthInput =
-    document.getElementById("dashboardMonth");
+    document.getElementById(
+      "dashboardMonth"
+    );
 
   const month =
-    monthInput?.value || currentMonth();
+    monthInput?.value ||
+    currentMonth();
 
   if (monthInput) {
     monthInput.value = month;
@@ -351,24 +651,34 @@ function renderDashboard() {
   recalculateOpenings(account);
 
   const ledgers =
-    getMonthLedgers(account, month);
+    getMonthLedgers(
+      account,
+      month
+    );
 
   let opening =
     Number(account.opening) || 0;
 
   if (ledgers.length) {
+
     opening =
-      Number(ledgers[0].opening) || 0;
+      Number(
+        ledgers[0].opening
+      );
+
   }
 
   let credits = 0;
   let expenses = 0;
 
   ledgers.forEach(ledger => {
-    const totals = ledgerTotals(ledger);
+
+    const totals =
+      ledgerTotals(ledger);
 
     credits += totals.credits;
     expenses += totals.expenses;
+
   });
 
   let closing =
@@ -377,53 +687,69 @@ function renderDashboard() {
     expenses;
 
   if (ledgers.length) {
+
     closing =
       ledgerTotals(
-        ledgers[ledgers.length - 1]
+        ledgers[
+          ledgers.length - 1
+        ]
       ).closing;
+
   }
 
-  const openingEl =
-    document.getElementById("dashboardOpening");
+  setText(
+    "dashboardOpening",
+    money(opening)
+  );
 
-  const creditsEl =
-    document.getElementById("dashboardCredits");
+  setText(
+    "dashboardCredits",
+    money(credits)
+  );
 
-  const expensesEl =
-    document.getElementById("dashboardExpenses");
+  setText(
+    "dashboardExpenses",
+    money(expenses)
+  );
 
-  const balanceEl =
-    document.getElementById("dashboardBalance");
+  setText(
+    "dashboardBalance",
+    money(closing)
+  );
 
-  if (openingEl) openingEl.textContent = money(opening);
-  if (creditsEl) creditsEl.textContent = money(credits);
-  if (expensesEl) expensesEl.textContent = money(expenses);
-  if (balanceEl) balanceEl.textContent = money(closing);
-
-  const meta =
-    document.getElementById("dashboardMeta");
-
-  if (meta) {
-    meta.textContent =
-      `${account.name} • ${formatMonth(month)}`;
-  }
+  setText(
+    "dashboardMeta",
+    account.name +
+    " • " +
+    formatMonth(month)
+  );
 
   const body =
-    document.getElementById("dashboardLedgerBody");
+    document.getElementById(
+      "dashboardLedgerBody"
+    );
 
   if (!body) return;
 
   body.innerHTML = "";
 
   ledgers.forEach(ledger => {
-    const totals = ledgerTotals(ledger);
 
-    const row = document.createElement("tr");
+    const totals =
+      ledgerTotals(ledger);
+
+    const row =
+      document.createElement("tr");
 
     row.innerHTML = `
-      <td>${formatDate(ledger.date)}</td>
 
-      <td>${money(totals.opening)}</td>
+      <td>
+        ${formatDate(ledger.date)}
+      </td>
+
+      <td>
+        ${money(totals.opening)}
+      </td>
 
       <td class="right">
         ${money(totals.credits)}
@@ -438,51 +764,88 @@ function renderDashboard() {
       </td>
 
       <td>
+
         <button
           class="edit"
           onclick="openLedgerDetails('${ledger.id}')"
         >
           Open
         </button>
+
       </td>
+
     `;
 
     body.appendChild(row);
+
   });
 
   const empty =
-    document.getElementById("dashboardEmpty");
+    document.getElementById(
+      "dashboardEmpty"
+    );
 
   if (empty) {
+
     empty.style.display =
-      ledgers.length ? "none" : "block";
+      ledgers.length
+        ? "none"
+        : "block";
+
   }
+
 }
 
+
 /* =========================================================
-   DAILY LEDGER — CREATE
+   DAILY LEDGER MODAL
 ========================================================= */
 
-function openDailyLedger(selectedDate = null) {
-  const account = currentAccount();
-
-  if (!account) {
-    alert("Please create a bank account first.");
-    return;
-  }
+function openDailyLedger(
+  selectedDate = null
+) {
 
   renderAllAccountSelects();
 
+  const account =
+    currentAccount();
+
+  if (!account) {
+
+    alert(
+      "Please create a bank account first."
+    );
+
+    return;
+
+  }
+
   const modal =
-    document.getElementById("dailyModal");
+    document.getElementById(
+      "dailyModal"
+    );
 
   const dateInput =
-    document.getElementById("ledgerDate");
+    document.getElementById(
+      "ledgerDate"
+    );
 
   const accountInput =
-    document.getElementById("ledgerAccount");
+    document.getElementById(
+      "ledgerAccount"
+    );
 
-  if (!modal || !dateInput || !accountInput) return;
+  if (!modal ||
+      !dateInput ||
+      !accountInput) {
+
+    alert(
+      "Daily ledger form was not found."
+    );
+
+    return;
+
+  }
 
   dateInput.value =
     selectedDate || today();
@@ -493,35 +856,64 @@ function openDailyLedger(selectedDate = null) {
   updateLedgerOpeningPreview();
 
   modal.classList.add("show");
+
+  modal.style.zIndex = "5000";
+
 }
+
 
 function closeDailyLedger() {
+
   const modal =
-    document.getElementById("dailyModal");
+    document.getElementById(
+      "dailyModal"
+    );
 
   if (modal) {
+
     modal.classList.remove("show");
+
   }
+
 }
 
+
+/* =========================================================
+   OPENING BALANCE PREVIEW
+========================================================= */
+
 function updateLedgerOpeningPreview() {
+
   const accountInput =
-    document.getElementById("ledgerAccount");
+    document.getElementById(
+      "ledgerAccount"
+    );
 
   const dateInput =
-    document.getElementById("ledgerDate");
+    document.getElementById(
+      "ledgerDate"
+    );
 
   const openingInput =
-    document.getElementById("ledgerOpening");
+    document.getElementById(
+      "ledgerOpening"
+    );
 
-  if (!accountInput || !dateInput || !openingInput) {
+  if (
+    !accountInput ||
+    !dateInput ||
+    !openingInput
+  ) {
     return;
   }
 
   const account =
-    getAccount(accountInput.value);
+    findAccount(
+      accountInput.value
+    );
 
-  const date = dateInput.value;
+  const date =
+    dateInput.value;
 
   if (!account || !date) return;
 
@@ -529,57 +921,106 @@ function updateLedgerOpeningPreview() {
 
   const existing =
     account.ledgers.find(
-      ledger => ledger.date === date
+      ledger =>
+        ledger.date === date
     );
 
   if (existing) {
-    openingInput.value = existing.opening;
+
+    openingInput.value =
+      existing.opening;
+
     return;
+
   }
 
-  const previous =
+  const earlier =
     sortLedgers(account)
-      .filter(ledger => ledger.date < date)
-      .pop();
+      .filter(
+        ledger =>
+          ledger.date < date
+      );
 
   let opening =
     Number(account.opening) || 0;
 
-  if (previous) {
+  if (earlier.length) {
+
+    const previous =
+      earlier[
+        earlier.length - 1
+      ];
+
     opening =
-      ledgerTotals(previous).closing;
+      ledgerTotals(
+        previous
+      ).closing;
+
   }
 
-  openingInput.value = opening;
+  openingInput.value =
+    opening;
+
 }
 
+
+/* =========================================================
+   SAVE DAILY LEDGER
+========================================================= */
+
 function saveDailyLedger() {
+
   const accountId =
-    document.getElementById("ledgerAccount")?.value;
+    document.getElementById(
+      "ledgerAccount"
+    )?.value;
 
   const date =
-    document.getElementById("ledgerDate")?.value;
+    document.getElementById(
+      "ledgerDate"
+    )?.value;
 
   const opening =
     Number(
-      document.getElementById("ledgerOpening")?.value
+      document.getElementById(
+        "ledgerOpening"
+      )?.value
     );
 
   if (!date) {
-    alert("Please select a date.");
+
+    alert(
+      "Please select a date."
+    );
+
     return;
+
   }
 
-  if (!Number.isFinite(opening) || opening < 0) {
-    alert("Please enter a valid opening balance.");
+  if (
+    !Number.isFinite(opening) ||
+    opening < 0
+  ) {
+
+    alert(
+      "Opening balance cannot be negative."
+    );
+
     return;
+
   }
 
-  const account = getAccount(accountId);
+  const account =
+    findAccount(accountId);
 
   if (!account) {
-    alert("Bank account not found.");
+
+    alert(
+      "Account not found."
+    );
+
     return;
+
   }
 
   if (!Array.isArray(account.ledgers)) {
@@ -588,28 +1029,47 @@ function saveDailyLedger() {
 
   const existing =
     account.ledgers.find(
-      ledger => ledger.date === date
+      ledger =>
+        ledger.date === date
     );
 
   if (existing) {
+
     closeDailyLedger();
 
-    openLedgerDetails(existing.id);
+    data.selectedAccount =
+      account.id;
+
+    saveData();
+
+    renderAll();
+
+    openLedgerDetails(
+      existing.id
+    );
 
     return;
+
   }
 
   const ledger = {
+
     id: createId(),
+
     date,
+
     opening,
+
     transactions: [],
+
     created: Date.now()
+
   };
 
   account.ledgers.push(ledger);
 
-  data.selectedAccount = account.id;
+  data.selectedAccount =
+    account.id;
 
   recalculateOpenings(account);
 
@@ -619,47 +1079,62 @@ function saveDailyLedger() {
 
   renderAll();
 
-  openLedgerDetails(ledger.id);
+  openLedgerDetails(
+    ledger.id
+  );
+
 }
 
+
 /* =========================================================
-   DAILY LEDGERS LIST
+   DAILY LEDGER LIST
 ========================================================= */
 
 function renderDailyLedgers() {
+
   renderAllAccountSelects();
 
-  const accountSelect =
-    document.getElementById("dailyAccount");
+  const select =
+    document.getElementById(
+      "dailyAccount"
+    );
 
   const monthInput =
-    document.getElementById("dailyMonth");
-
-  if (!accountSelect || !monthInput) return;
+    document.getElementById(
+      "dailyMonth"
+    );
 
   const account =
-    getAccount(accountSelect.value) ||
+    findAccount(
+      select?.value
+    ) ||
     currentAccount();
 
   if (!account) return;
 
-  data.selectedAccount = account.id;
+  data.selectedAccount =
+    account.id;
 
   const month =
-    monthInput.value || currentMonth();
+    monthInput?.value ||
+    currentMonth();
 
-  monthInput.value = month;
+  if (monthInput) {
+    monthInput.value = month;
+  }
 
   recalculateOpenings(account);
 
   const ledgers =
-    getMonthLedgers(account, month);
+    getMonthLedgers(
+      account,
+      month
+    );
 
   const container =
-    document.getElementById("dailyLedgerList");
-
-  const empty =
-    document.getElementById("dailyEmpty");
+    document.getElementById(
+      "dailyLedgerList"
+    );
 
   if (!container) return;
 
@@ -669,14 +1144,18 @@ function renderDailyLedgers() {
     .slice()
     .reverse()
     .forEach(ledger => {
-      const totals = ledgerTotals(ledger);
+
+      const totals =
+        ledgerTotals(ledger);
 
       const card =
         document.createElement("div");
 
-      card.className = "account-card";
+      card.className =
+        "account-card";
 
       card.innerHTML = `
+
         <div class="eyebrow">
           DAILY LEDGER
         </div>
@@ -721,7 +1200,7 @@ function renderDailyLedgers() {
 
         <p>
           ${ledger.transactions.length}
-          transaction(s)
+          transactions
         </p>
 
         <div class="account-buttons">
@@ -741,48 +1220,85 @@ function renderDailyLedgers() {
           </button>
 
         </div>
+
       `;
 
       container.appendChild(card);
+
     });
 
+  const empty =
+    document.getElementById(
+      "dailyEmpty"
+    );
+
   if (empty) {
+
     empty.style.display =
-      ledgers.length ? "none" : "block";
+      ledgers.length
+        ? "none"
+        : "block";
+
   }
+
 }
 
+
 /* =========================================================
-   LEDGER DETAILS
+   OPEN LEDGER DETAILS
 ========================================================= */
 
-function openLedgerDetails(ledgerId) {
-  const account = currentAccount();
+function openLedgerDetails(
+  ledgerId
+) {
+
+  const account =
+    currentAccount();
 
   if (!account) return;
 
   recalculateOpenings(account);
 
   const ledger =
-    findLedger(account, ledgerId);
+    findLedger(
+      account,
+      ledgerId
+    );
 
   if (!ledger) {
-    alert("Ledger not found.");
+
+    alert(
+      "Ledger not found."
+    );
+
     return;
+
   }
 
   let viewer =
-    document.getElementById("ledgerViewer");
+    document.getElementById(
+      "ledgerViewer"
+    );
 
   if (!viewer) {
+
     viewer =
       document.createElement("div");
 
-    viewer.id = "ledgerViewer";
-    viewer.className = "modal";
+    viewer.id =
+      "ledgerViewer";
 
-    document.body.appendChild(viewer);
+    viewer.className =
+      "modal";
+
+    document.body.appendChild(
+      viewer
+    );
+
   }
+
+  viewer.style.zIndex =
+    "4000";
 
   const totals =
     ledgerTotals(ledger);
@@ -792,48 +1308,60 @@ function openLedgerDetails(ledgerId) {
 
   let rows = "";
 
-  (ledger.transactions || []).forEach(transaction => {
+  (
+    ledger.transactions || []
+  ).forEach(transaction => {
+
     const amount =
       Number(transaction.amount) || 0;
 
-    if (transaction.type === "credit") {
+    if (
+      transaction.type === "credit"
+    ) {
+
       running += amount;
-    } else {
+
+    }
+    else {
+
       running -= amount;
+
     }
 
     const isCredit =
       transaction.type === "credit";
 
     rows += `
+
       <tr>
 
         <td>
-          <span
-            class="${
-              isCredit
-                ? "credit-badge"
-                : "expense-badge"
-            }"
-          >
-            ${
-              isCredit
-                ? "CREDIT"
-                : "EXPENSE"
-            }
+
+          <span class="
+            ${isCredit
+              ? "transaction-credit"
+              : "transaction-expense"}
+          ">
+
+            ${isCredit
+              ? "CREDIT"
+              : "EXPENSE"}
+
           </span>
+
         </td>
 
         <td>
-          ${escapeHTML(transaction.description)}
+          ${escapeHTML(
+            transaction.description
+          )}
         </td>
 
-        <td class="right ${
-          isCredit ? "credit" : "expense"
-        }">
+        <td class="right">
 
-          ${
-            isCredit ? "+" : "-"
+          ${isCredit
+            ? "+"
+            : "-"
           }${money(amount)}
 
         </td>
@@ -871,32 +1399,41 @@ function openLedgerDetails(ledgerId) {
         </td>
 
       </tr>
+
     `;
+
   });
 
   if (!rows) {
+
     rows = `
+
       <tr>
+
         <td
           colspan="5"
           style="
             text-align:center;
-            padding:35px;
+            padding:40px;
             color:#777;
           "
         >
           No transactions yet.
         </td>
+
       </tr>
+
     `;
+
   }
 
   viewer.innerHTML = `
+
     <div
       class="modal-box"
       style="
-        width:min(1000px,96vw);
-        max-height:92vh;
+        width:min(1100px,96vw);
+        max-height:94vh;
         overflow:auto;
       "
     >
@@ -918,7 +1455,7 @@ function openLedgerDetails(ledgerId) {
             style="
               color:#aaa394;
               margin-top:6px;
-              font-size:12px;
+              font-size:13px;
             "
           >
             ${formatDate(ledger.date)}
@@ -936,12 +1473,14 @@ function openLedgerDetails(ledgerId) {
       </div>
 
 
+      <!-- SUMMARY -->
+
       <div class="cards">
 
         <div class="card">
 
           <div class="card-label">
-            OPENING
+            OPENING BALANCE
           </div>
 
           <div class="card-value">
@@ -954,7 +1493,7 @@ function openLedgerDetails(ledgerId) {
         <div class="card">
 
           <div class="card-label">
-            CREDITS
+            TOTAL CREDITS
           </div>
 
           <div class="card-value">
@@ -967,7 +1506,7 @@ function openLedgerDetails(ledgerId) {
         <div class="card">
 
           <div class="card-label">
-            EXPENSES
+            TOTAL EXPENSES
           </div>
 
           <div class="card-value">
@@ -992,9 +1531,11 @@ function openLedgerDetails(ledgerId) {
       </div>
 
 
+      <!-- TRANSACTIONS -->
+
       <div
         class="ledger"
-        style="margin-top:18px;"
+        style="margin-top:20px;"
       >
 
         <div class="ledger-header">
@@ -1006,14 +1547,19 @@ function openLedgerDetails(ledgerId) {
             </div>
 
             <h2>
-              DAILY TRANSACTIONS
+              DAILY LEDGER —
+              ${formatDate(ledger.date)}
             </h2>
 
           </div>
 
           <button
             class="btn gold no-print"
-            onclick="openTransaction('${ledger.id}')"
+            onclick="
+              openTransaction(
+                '${ledger.id}'
+              )
+            "
           >
             + Add Transaction
           </button>
@@ -1054,7 +1600,9 @@ function openLedgerDetails(ledgerId) {
             </thead>
 
             <tbody>
+
               ${rows}
+
             </tbody>
 
             <tfoot>
@@ -1084,18 +1632,28 @@ function openLedgerDetails(ledgerId) {
       </div>
 
 
-      <div class="modal-buttons no-print">
+      <div
+        class="modal-buttons no-print"
+      >
 
         <button
           class="btn outline"
-          onclick="printDailyLedger('${ledger.id}')"
+          onclick="
+            printDailyLedger(
+              '${ledger.id}'
+            )
+          "
         >
-          🖨 Print Daily Ledger
+          🖨 Print / PDF
         </button>
 
         <button
           class="btn gold"
-          onclick="openTransaction('${ledger.id}')"
+          onclick="
+            openTransaction(
+              '${ledger.id}'
+            )
+          "
         >
           + Add Transaction
         </button>
@@ -1103,56 +1661,35 @@ function openLedgerDetails(ledgerId) {
       </div>
 
     </div>
+
   `;
 
   viewer.classList.add("show");
+
 }
 
-function closeLedgerViewer() {
-  const viewer =
-    document.getElementById("ledgerViewer");
-
-  if (viewer) {
-    viewer.classList.remove("show");
-  }
-}
 
 /* =========================================================
-   DELETE DAILY LEDGER
+   CLOSE LEDGER VIEWER
 ========================================================= */
 
-function deleteDailyLedger(ledgerId) {
-  const account = currentAccount();
+function closeLedgerViewer() {
 
-  if (!account) return;
-
-  const ledger =
-    findLedger(account, ledgerId);
-
-  if (!ledger) return;
-
-  const confirmed =
-    confirm(
-      `Delete the entire ledger for ${formatDate(
-        ledger.date
-      )}?\n\nAll credits and expenses for this day will also be deleted.`
+  const viewer =
+    document.getElementById(
+      "ledgerViewer"
     );
 
-  if (!confirmed) return;
+  if (viewer) {
 
-  account.ledgers =
-    account.ledgers.filter(
-      item => item.id !== ledgerId
+    viewer.classList.remove(
+      "show"
     );
 
-  recalculateOpenings(account);
+  }
 
-  saveData();
-
-  closeLedgerViewer();
-
-  renderAll();
 }
+
 
 /* =========================================================
    TRANSACTION MODAL
@@ -1162,101 +1699,202 @@ function openTransaction(
   ledgerId,
   transactionId = null
 ) {
-  const account = currentAccount();
 
-  if (!account) return;
+  const account =
+    currentAccount();
 
   const ledger =
-    findLedger(account, ledgerId);
+    findLedger(
+      account,
+      ledgerId
+    );
 
-  if (!ledger) return;
+  if (!ledger) {
 
-  const ledgerIdInput =
-    document.getElementById("transactionLedgerId");
+    alert(
+      "Ledger not found."
+    );
 
-  const transactionIdInput =
-    document.getElementById("transactionId");
-
-  const typeInput =
-    document.getElementById("transactionType");
-
-  const amountInput =
-    document.getElementById("transactionAmount");
-
-  const descriptionInput =
-    document.getElementById("transactionDescription");
-
-  const title =
-    document.getElementById("transactionTitle");
-
-  const modal =
-    document.getElementById("transactionModal");
-
-  if (
-    !ledgerIdInput ||
-    !transactionIdInput ||
-    !typeInput ||
-    !amountInput ||
-    !descriptionInput ||
-    !title ||
-    !modal
-  ) {
     return;
+
   }
 
-  ledgerIdInput.value = ledgerId;
+  const modal =
+    document.getElementById(
+      "transactionModal"
+    );
 
-  transactionIdInput.value =
-    transactionId || "";
+  if (!modal) {
+
+    alert(
+      "Transaction window was not found."
+    );
+
+    return;
+
+  }
+
+  const ledgerIdInput =
+    document.getElementById(
+      "transactionLedgerId"
+    );
+
+  const transactionIdInput =
+    document.getElementById(
+      "transactionId"
+    );
+
+  const type =
+    document.getElementById(
+      "transactionType"
+    );
+
+  const amount =
+    document.getElementById(
+      "transactionAmount"
+    );
+
+  const description =
+    document.getElementById(
+      "transactionDescription"
+    );
+
+  const title =
+    document.getElementById(
+      "transactionTitle"
+    );
+
+  if (ledgerIdInput) {
+    ledgerIdInput.value =
+      ledgerId;
+  }
+
+  if (transactionIdInput) {
+    transactionIdInput.value =
+      transactionId || "";
+  }
 
   if (transactionId) {
+
     const transaction =
-      ledger.transactions.find(
-        item => item.id === transactionId
+      (
+        ledger.transactions || []
+      ).find(
+        item =>
+          item.id ===
+          transactionId
       );
 
     if (!transaction) return;
 
-    title.textContent = "Edit Transaction";
+    if (title) {
+      title.textContent =
+        "Edit Transaction";
+    }
 
-    typeInput.value = transaction.type;
-    amountInput.value = transaction.amount;
-    descriptionInput.value =
-      transaction.description;
-  } else {
-    title.textContent = "Add Transaction";
+    if (type) {
+      type.value =
+        transaction.type;
+    }
 
-    typeInput.value = "expense";
-    amountInput.value = "";
-    descriptionInput.value = "";
+    if (amount) {
+      amount.value =
+        transaction.amount;
+    }
+
+    if (description) {
+      description.value =
+        transaction.description;
+    }
+
+  }
+  else {
+
+    if (title) {
+      title.textContent =
+        "Add Transaction";
+    }
+
+    if (type) {
+      type.value =
+        "expense";
+    }
+
+    if (amount) {
+      amount.value =
+        "";
+    }
+
+    if (description) {
+      description.value =
+        "";
+    }
+
   }
 
-  modal.classList.add("show");
+  /*
+     IMPORTANT:
+     Transaction modal is deliberately placed
+     ABOVE the ledger viewer.
+  */
+
+  modal.style.zIndex =
+    "99999";
+
+  modal.classList.add(
+    "show"
+  );
 
   setTimeout(() => {
-    descriptionInput.focus();
+
+    if (description) {
+      description.focus();
+    }
+
   }, 100);
+
 }
+
+
+/* =========================================================
+   CLOSE TRANSACTION
+========================================================= */
 
 function closeTransaction() {
-  const modal =
-    document.getElementById("transactionModal");
 
-  if (modal) {
-    modal.classList.remove("show");
-  }
+  const modal =
+    document.getElementById(
+      "transactionModal"
+    );
+
+  if (!modal) return;
+
+  modal.classList.remove(
+    "show"
+  );
+
+  modal.style.zIndex = "";
+
 }
+
 
 /* =========================================================
    SAVE TRANSACTION
 ========================================================= */
 
 function saveTransaction() {
-  const account = currentAccount();
+
+  const account =
+    currentAccount();
 
   if (!account) {
-    alert("Bank account not found.");
+
+    alert(
+      "Please select a bank account."
+    );
+
     return;
+
   }
 
   const ledgerId =
@@ -1284,95 +1922,158 @@ function saveTransaction() {
   const description =
     document.getElementById(
       "transactionDescription"
-    )?.value.trim();
+    )?.value
+      .trim();
 
-  if (!ledgerId) {
-    alert("Ledger not found.");
-    return;
-  }
+  if (
+    !Number.isFinite(amount) ||
+    amount <= 0
+  ) {
 
-  if (!Number.isFinite(amount) || amount <= 0) {
-    alert("Please enter a valid amount.");
+    alert(
+      "Please enter a valid amount."
+    );
+
     return;
+
   }
 
   if (!description) {
-    alert("Please enter a description.");
+
+    alert(
+      "Please enter a description."
+    );
+
     return;
+
   }
 
   if (
     type !== "credit" &&
     type !== "expense"
   ) {
-    alert("Please select Credit or Expense.");
+
+    alert(
+      "Please select Credit or Expense."
+    );
+
     return;
+
   }
 
   const ledger =
-    findLedger(account, ledgerId);
+    findLedger(
+      account,
+      ledgerId
+    );
 
   if (!ledger) {
-    alert("Ledger not found.");
+
+    alert(
+      "Ledger not found."
+    );
+
     return;
+
   }
 
   if (!Array.isArray(ledger.transactions)) {
     ledger.transactions = [];
   }
 
+
+  /* =======================================================
+     EDIT
+  ======================================================= */
+
   if (transactionId) {
+
     const index =
       ledger.transactions.findIndex(
         transaction =>
-          transaction.id === transactionId
+          transaction.id ===
+          transactionId
       );
 
-    if (index === -1) {
-      alert("Transaction not found.");
-      return;
+    if (index !== -1) {
+
+      ledger.transactions[index] = {
+
+        ...ledger.transactions[index],
+
+        type,
+
+        amount,
+
+        description
+
+      };
+
     }
 
-    ledger.transactions[index] = {
-      ...ledger.transactions[index],
-      type,
-      amount,
-      description
-    };
-  } else {
-    ledger.transactions.push({
-      id: createId(),
-      type,
-      amount,
-      description,
-      created: Date.now()
-    });
   }
 
-  recalculateOpenings(account);
+
+  /* =======================================================
+     ADD
+  ======================================================= */
+
+  else {
+
+    ledger.transactions.push({
+
+      id: createId(),
+
+      type,
+
+      amount,
+
+      description,
+
+      created: Date.now()
+
+    });
+
+  }
+
+
+  /* =======================================================
+     SAVE
+  ======================================================= */
+
+  recalculateOpenings(
+    account
+  );
 
   saveData();
 
-  /*
-     Refresh the ledger viewer.
-  */
-  openLedgerDetails(ledgerId);
+
+  /* =======================================================
+     REFRESH LEDGER BEHIND MODAL
+  ======================================================= */
+
+  refreshOpenLedgerViewer(
+    ledgerId
+  );
 
   renderAll();
 
-  /*
-     IMPORTANT:
-     Keep transaction window open after saving.
 
-     This allows continuous entry:
-     Expense → Save → Expense → Save → Credit → Save
-  */
+  /* =======================================================
+     CONTINUOUS ENTRY
+     
+     DO NOT CLOSE TRANSACTION MODAL.
+  ======================================================= */
 
   const transactionIdInput =
-    document.getElementById("transactionId");
+    document.getElementById(
+      "transactionId"
+    );
 
   const amountInput =
-    document.getElementById("transactionAmount");
+    document.getElementById(
+      "transactionAmount"
+    );
 
   const descriptionInput =
     document.getElementById(
@@ -1380,13 +2081,14 @@ function saveTransaction() {
     );
 
   const typeInput =
-    document.getElementById("transactionType");
+    document.getElementById(
+      "transactionType"
+    );
 
   const title =
-    document.getElementById("transactionTitle");
-
-  const modal =
-    document.getElementById("transactionModal");
+    document.getElementById(
+      "transactionTitle"
+    );
 
   if (transactionIdInput) {
     transactionIdInput.value = "";
@@ -1405,19 +2107,88 @@ function saveTransaction() {
   }
 
   if (title) {
-    title.textContent = "Add Transaction";
+    title.textContent =
+      "Add Transaction";
   }
 
+  const modal =
+    document.getElementById(
+      "transactionModal"
+    );
+
   if (modal) {
-    modal.classList.add("show");
+
+    modal.style.zIndex =
+      "99999";
+
+    modal.classList.add(
+      "show"
+    );
+
   }
 
   setTimeout(() => {
+
     if (descriptionInput) {
       descriptionInput.focus();
     }
+
   }, 100);
+
 }
+
+
+/* =========================================================
+   REFRESH OPEN LEDGER
+========================================================= */
+
+function refreshOpenLedgerViewer(
+  ledgerId
+) {
+
+  const viewer =
+    document.getElementById(
+      "ledgerViewer"
+    );
+
+  if (!viewer) return;
+
+  if (
+    !viewer.classList.contains(
+      "show"
+    )
+  ) {
+    return;
+  }
+
+  openLedgerDetails(
+    ledgerId
+  );
+
+  /*
+     Restore transaction modal
+     ABOVE the newly-rendered viewer.
+  */
+
+  const transactionModal =
+    document.getElementById(
+      "transactionModal"
+    );
+
+  if (
+    transactionModal &&
+    transactionModal.classList.contains(
+      "show"
+    )
+  ) {
+
+    transactionModal.style.zIndex =
+      "99999";
+
+  }
+
+}
+
 
 /* =========================================================
    EDIT TRANSACTION
@@ -1427,11 +2198,14 @@ function editTransaction(
   ledgerId,
   transactionId
 ) {
+
   openTransaction(
     ledgerId,
     transactionId
   );
+
 }
+
 
 /* =========================================================
    DELETE TRANSACTION
@@ -1441,89 +2215,185 @@ function deleteTransaction(
   ledgerId,
   transactionId
 ) {
-  const account = currentAccount();
 
-  if (!account) return;
+  const account =
+    currentAccount();
 
   const ledger =
-    findLedger(account, ledgerId);
+    findLedger(
+      account,
+      ledgerId
+    );
 
   if (!ledger) return;
 
   const transaction =
-    ledger.transactions.find(
-      item => item.id === transactionId
+    (
+      ledger.transactions || []
+    ).find(
+      item =>
+        item.id ===
+        transactionId
     );
 
   if (!transaction) return;
 
-  if (!confirm("Delete this transaction?")) {
+  if (
+    !confirm(
+      "Delete this transaction?"
+    )
+  ) {
     return;
   }
 
   ledger.transactions =
     ledger.transactions.filter(
-      item => item.id !== transactionId
+      item =>
+        item.id !==
+        transactionId
     );
 
-  recalculateOpenings(account);
+  recalculateOpenings(
+    account
+  );
 
   saveData();
 
-  openLedgerDetails(ledgerId);
+  openLedgerDetails(
+    ledgerId
+  );
 
   renderAll();
+
 }
+
+
+/* =========================================================
+   DELETE DAILY LEDGER
+========================================================= */
+
+function deleteDailyLedger(
+  ledgerId
+) {
+
+  const account =
+    currentAccount();
+
+  if (!account) return;
+
+  const ledger =
+    findLedger(
+      account,
+      ledgerId
+    );
+
+  if (!ledger) return;
+
+  if (
+    !confirm(
+      "Delete the entire ledger for " +
+      formatDate(ledger.date) +
+      "?\n\n" +
+      "All credits and expenses for this day " +
+      "will also be deleted."
+    )
+  ) {
+    return;
+  }
+
+  account.ledgers =
+    account.ledgers.filter(
+      item =>
+        item.id !== ledgerId
+    );
+
+  recalculateOpenings(
+    account
+  );
+
+  saveData();
+
+  closeLedgerViewer();
+
+  renderAll();
+
+}
+
 
 /* =========================================================
    MONTHLY SUMMARY
 ========================================================= */
 
 function renderMonthlySummary() {
+
   renderAllAccountSelects();
 
-  const accountSelect =
-    document.getElementById("monthlyAccount");
+  const select =
+    document.getElementById(
+      "monthlyAccount"
+    );
 
   const monthInput =
-    document.getElementById("monthlyMonth");
-
-  if (!accountSelect || !monthInput) return;
+    document.getElementById(
+      "monthlyMonth"
+    );
 
   const account =
-    getAccount(accountSelect.value) ||
+    findAccount(
+      select?.value
+    ) ||
     currentAccount();
 
   if (!account) return;
 
-  data.selectedAccount = account.id;
+  data.selectedAccount =
+    account.id;
 
   const month =
-    monthInput.value || currentMonth();
+    monthInput?.value ||
+    currentMonth();
 
-  monthInput.value = month;
+  if (monthInput) {
+    monthInput.value =
+      month;
+  }
 
-  recalculateOpenings(account);
+  recalculateOpenings(
+    account
+  );
 
   const ledgers =
-    getMonthLedgers(account, month);
+    getMonthLedgers(
+      account,
+      month
+    );
 
   let opening =
     Number(account.opening) || 0;
 
   if (ledgers.length) {
+
     opening =
-      Number(ledgers[0].opening) || 0;
+      Number(
+        ledgers[0].opening
+      );
+
   }
 
   let credits = 0;
   let expenses = 0;
 
   ledgers.forEach(ledger => {
-    const totals = ledgerTotals(ledger);
 
-    credits += totals.credits;
-    expenses += totals.expenses;
+    const totals =
+      ledgerTotals(ledger);
+
+    credits +=
+      totals.credits;
+
+    expenses +=
+      totals.expenses;
+
   });
 
   let closing =
@@ -1532,20 +2402,15 @@ function renderMonthlySummary() {
     expenses;
 
   if (ledgers.length) {
+
     closing =
       ledgerTotals(
-        ledgers[ledgers.length - 1]
+        ledgers[
+          ledgers.length - 1
+        ]
       ).closing;
+
   }
-
-  const setText = (id, value) => {
-    const element =
-      document.getElementById(id);
-
-    if (element) {
-      element.textContent = value;
-    }
-  };
 
   setText(
     "monthlyOpening",
@@ -1569,12 +2434,16 @@ function renderMonthlySummary() {
 
   setText(
     "monthlyPrintTitle",
-    `${formatMonth(month)} — MONTHLY SUMMARY`
+    formatMonth(month) +
+    " — MONTHLY SUMMARY"
   );
 
   setText(
     "monthlyPrintMeta",
-    `${account.name} • ${ledgers.length} daily ledgers`
+    account.name +
+    " • " +
+    ledgers.length +
+    " daily ledgers"
   );
 
   setText(
@@ -1583,42 +2452,51 @@ function renderMonthlySummary() {
   );
 
   const body =
-    document.getElementById("monthlyBody");
+    document.getElementById(
+      "monthlyBody"
+    );
 
-  if (!body) return;
+  if (body) {
 
-  body.innerHTML = "";
+    body.innerHTML = "";
 
-  ledgers.forEach(ledger => {
-    const totals = ledgerTotals(ledger);
+    ledgers.forEach(ledger => {
 
-    const row =
-      document.createElement("tr");
+      const totals =
+        ledgerTotals(ledger);
 
-    row.innerHTML = `
-      <td>
-        ${formatDate(ledger.date)}
-      </td>
+      const row =
+        document.createElement("tr");
 
-      <td class="right">
-        ${money(totals.opening)}
-      </td>
+      row.innerHTML = `
 
-      <td class="right">
-        ${money(totals.credits)}
-      </td>
+        <td>
+          ${formatDate(ledger.date)}
+        </td>
 
-      <td class="right">
-        ${money(totals.expenses)}
-      </td>
+        <td class="right">
+          ${money(totals.opening)}
+        </td>
 
-      <td class="right">
-        ${money(totals.closing)}
-      </td>
-    `;
+        <td class="right">
+          ${money(totals.credits)}
+        </td>
 
-    body.appendChild(row);
-  });
+        <td class="right">
+          ${money(totals.expenses)}
+        </td>
+
+        <td class="right">
+          ${money(totals.closing)}
+        </td>
+
+      `;
+
+      body.appendChild(row);
+
+    });
+
+  }
 
   setText(
     "monthlyFooterOpening",
@@ -1639,214 +2517,608 @@ function renderMonthlySummary() {
     "monthlyFooterClosing",
     money(closing)
   );
+
 }
 
+
 /* =========================================================
-   MONTHLY PRINT
+   PRINT MONTHLY SUMMARY
 ========================================================= */
 
 function printMonthlySummary() {
-  const account = currentAccount();
+
+  const account =
+    currentAccount();
 
   if (!account) return;
 
   const month =
     document.getElementById(
       "monthlyMonth"
-    )?.value || currentMonth();
+    )?.value ||
+    currentMonth();
 
-  recalculateOpenings(account);
+  recalculateOpenings(
+    account
+  );
 
   const ledgers =
-    getMonthLedgers(account, month);
+    getMonthLedgers(
+      account,
+      month
+    );
 
   let opening =
-    Number(account.opening) || 0;
-
-  if (ledgers.length) {
-    opening =
-      Number(ledgers[0].opening) || 0;
-  }
+    ledgers.length
+      ? ledgerTotals(
+          ledgers[0]
+        ).opening
+      : Number(account.opening) || 0;
 
   let credits = 0;
   let expenses = 0;
 
   ledgers.forEach(ledger => {
-    const totals = ledgerTotals(ledger);
 
-    credits += totals.credits;
-    expenses += totals.expenses;
+    const totals =
+      ledgerTotals(ledger);
+
+    credits +=
+      totals.credits;
+
+    expenses +=
+      totals.expenses;
+
   });
 
-  let closing =
-    opening +
-    credits -
-    expenses;
-
-  if (ledgers.length) {
-    closing =
-      ledgerTotals(
-        ledgers[ledgers.length - 1]
-      ).closing;
-  }
+  const closing =
+    ledgers.length
+      ? ledgerTotals(
+          ledgers[
+            ledgers.length - 1
+          ]
+        ).closing
+      : opening;
 
   let rows = "";
 
   ledgers.forEach(ledger => {
-    const totals = ledgerTotals(ledger);
+
+    const totals =
+      ledgerTotals(ledger);
 
     rows += `
+
       <tr>
-        <td>${formatDate(ledger.date)}</td>
-        <td>${money(totals.opening)}</td>
-        <td class="credit">
-          +${money(totals.credits)}
+
+        <td>
+          ${formatDate(ledger.date)}
         </td>
-        <td class="expense">
-          -${money(totals.expenses)}
+
+        <td>
+          ${money(totals.opening)}
         </td>
-        <td>${money(totals.closing)}</td>
+
+        <td>
+          ${money(totals.credits)}
+        </td>
+
+        <td>
+          ${money(totals.expenses)}
+        </td>
+
+        <td>
+          ${money(totals.closing)}
+        </td>
+
       </tr>
+
     `;
+
   });
 
   if (!rows) {
+
     rows = `
+
       <tr>
+
         <td colspan="5">
-          No daily ledgers recorded.
+          No daily ledgers.
         </td>
+
       </tr>
+
     `;
+
   }
 
-  openPrintWindow(
-    `${account.name} - ${formatMonth(month)}`,
-    `
-      <div class="header">
-        <div class="brand">
-          WOGE LEDGER
-        </div>
+  const printWindow =
+    window.open(
+      "",
+      "_blank"
+    );
 
-        <div class="company">
-          WORD OF GOD ENTERPRISES
-        </div>
+  if (!printWindow) {
 
-        <div class="subtitle">
-          BANK WORKSHOP EXPENSE & ACCOUNT LEDGER
-        </div>
-      </div>
+    alert(
+      "Please allow pop-ups to print the ledger."
+    );
 
-      <div class="content">
+    return;
 
-        <div class="gold-line"></div>
+  }
 
-        <h1>
-          ${escapeHTML(account.name)}
-        </h1>
+  printWindow.document.write(`
 
-        <h2>
-          ${formatMonth(month)}
-          — Monthly Ledger
-        </h2>
+<!DOCTYPE html>
 
-        <div class="summary">
+<html>
 
-          <div class="box">
-            <label>OPENING BALANCE</label>
-            <strong>
-              ${money(opening)}
-            </strong>
-          </div>
+<head>
 
-          <div class="box">
-            <label>TOTAL CREDITS</label>
-            <strong class="credit">
-              +${money(credits)}
-            </strong>
-          </div>
+<meta charset="UTF-8">
 
-          <div class="box">
-            <label>TOTAL EXPENSES</label>
-            <strong class="expense">
-              -${money(expenses)}
-            </strong>
-          </div>
+<title>
+  WOGE Ledger —
+  ${formatMonth(month)}
+</title>
 
-          <div class="box closing">
-            <label>CLOSING BALANCE</label>
-            <strong>
-              ${money(closing)}
-            </strong>
-          </div>
+<style>
 
-        </div>
+@page {
 
-        <h3>
-          DAILY LEDGER SUMMARY
-        </h3>
+  size: A4 portrait;
 
-        <table>
+  margin: 12mm;
 
-          <thead>
-            <tr>
-              <th>DATE</th>
-              <th>OPENING</th>
-              <th>CREDITS</th>
-              <th>EXPENSES</th>
-              <th>CLOSING</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            ${rows}
-          </tbody>
-
-        </table>
-
-        <div class="closing-section">
-
-          <span>
-            MONTH ENDING BALANCE
-          </span>
-
-          <strong>
-            ${money(closing)}
-          </strong>
-
-        </div>
-
-        <div class="signature">
-          Authorized / Verified By
-        </div>
-
-        <div class="footer">
-          WORD OF GOD ENTERPRISES
-          <span>
-            Printed ${new Date().toLocaleDateString("en-IN")}
-          </span>
-        </div>
-
-      </div>
-    `
-  );
 }
 
+* {
+
+  box-sizing:border-box;
+
+}
+
+body {
+
+  margin:0;
+
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif;
+
+  background:#ffffff;
+
+  color:#151515;
+
+}
+
+.header {
+
+  border:2px solid #b88918;
+
+  padding:22px;
+
+  margin-bottom:18px;
+
+  position:relative;
+
+}
+
+.header:after {
+
+  content:"";
+
+  position:absolute;
+
+  left:0;
+
+  right:0;
+
+  bottom:0;
+
+  height:5px;
+
+  background:#b88918;
+
+}
+
+.brand {
+
+  font-size:20px;
+
+  font-weight:800;
+
+  letter-spacing:3px;
+
+  color:#151515;
+
+}
+
+.subtitle {
+
+  color:#8a6918;
+
+  font-size:11px;
+
+  font-weight:bold;
+
+  letter-spacing:2px;
+
+  margin-top:7px;
+
+}
+
+.title {
+
+  font-size:27px;
+
+  font-weight:800;
+
+  margin-top:18px;
+
+}
+
+.meta {
+
+  font-size:13px;
+
+  color:#555;
+
+  margin-top:6px;
+
+}
+
+.summary {
+
+  display:grid;
+
+  grid-template-columns:
+    repeat(4,1fr);
+
+  gap:9px;
+
+  margin:18px 0;
+
+}
+
+.box {
+
+  border:1px solid #c5c5c5;
+
+  padding:13px;
+
+  background:#fafafa;
+
+}
+
+.box.highlight {
+
+  border:2px solid #b88918;
+
+  background:#fffaf0;
+
+}
+
+.label {
+
+  font-size:9px;
+
+  font-weight:bold;
+
+  letter-spacing:1.2px;
+
+  color:#777;
+
+}
+
+.value {
+
+  font-size:16px;
+
+  font-weight:800;
+
+  margin-top:7px;
+
+}
+
+table {
+
+  width:100%;
+
+  border-collapse:collapse;
+
+  margin-top:15px;
+
+  font-size:11px;
+
+}
+
+th {
+
+  background:#171717;
+
+  color:#d7b34d;
+
+  padding:10px 8px;
+
+  border:1px solid #171717;
+
+  text-align:left;
+
+  letter-spacing:.6px;
+
+}
+
+td {
+
+  border:1px solid #d4d4d4;
+
+  padding:9px 8px;
+
+}
+
+tfoot td {
+
+  background:#fff8e8;
+
+  border-top:2px solid #b88918;
+
+  font-weight:bold;
+
+}
+
+.right {
+
+  text-align:right;
+
+}
+
+.footer {
+
+  margin-top:30px;
+
+  padding-top:10px;
+
+  border-top:1px solid #b88918;
+
+  font-size:9px;
+
+  color:#777;
+
+  display:flex;
+
+  justify-content:space-between;
+
+}
+
+@media print {
+
+  body {
+
+    -webkit-print-color-adjust:exact;
+
+    print-color-adjust:exact;
+
+  }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="header">
+
+  <div class="brand">
+    WORD OF GOD ENTERPRISES
+  </div>
+
+  <div class="subtitle">
+    OFFICIAL BANK WORKSHOP EXPENSE LEDGER
+  </div>
+
+  <div class="title">
+    ${formatMonth(month)}
+    — MONTHLY LEDGER
+  </div>
+
+  <div class="meta">
+    Account:
+    ${escapeHTML(account.name)}
+  </div>
+
+</div>
+
+
+<div class="summary">
+
+  <div class="box">
+
+    <div class="label">
+      OPENING BALANCE
+    </div>
+
+    <div class="value">
+      ${money(opening)}
+    </div>
+
+  </div>
+
+
+  <div class="box">
+
+    <div class="label">
+      TOTAL CREDITS
+    </div>
+
+    <div class="value">
+      ${money(credits)}
+    </div>
+
+  </div>
+
+
+  <div class="box">
+
+    <div class="label">
+      TOTAL EXPENSES
+    </div>
+
+    <div class="value">
+      ${money(expenses)}
+    </div>
+
+  </div>
+
+
+  <div class="box highlight">
+
+    <div class="label">
+      CLOSING BALANCE
+    </div>
+
+    <div class="value">
+      ${money(closing)}
+    </div>
+
+  </div>
+
+</div>
+
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>DATE</th>
+
+<th>OPENING</th>
+
+<th>CREDITS</th>
+
+<th>EXPENSES</th>
+
+<th>CLOSING</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+${rows}
+
+</tbody>
+
+<tfoot>
+
+<tr>
+
+<td>
+  MONTH TOTAL
+</td>
+
+<td>
+  ${money(opening)}
+</td>
+
+<td>
+  ${money(credits)}
+</td>
+
+<td>
+  ${money(expenses)}
+</td>
+
+<td>
+  ${money(closing)}
+</td>
+
+</tr>
+
+</tfoot>
+
+</table>
+
+
+<div class="footer">
+
+  <span>
+    WORD OF GOD ENTERPRISES
+  </span>
+
+  <span>
+    Generated:
+    ${formatDate(today())}
+  </span>
+
+</div>
+
+
+<script>
+
+window.onload = function() {
+
+  setTimeout(
+    function() {
+      window.print();
+    },
+    400
+  );
+
+};
+
+<\/script>
+
+</body>
+
+</html>
+
+  `);
+
+  printWindow.document.close();
+
+}
+
+
 /* =========================================================
-   DAILY PRINT
+   PRINT DAILY LEDGER
 ========================================================= */
 
-function printDailyLedger(ledgerId) {
-  const account = currentAccount();
+function printDailyLedger(
+  ledgerId
+) {
+
+  const account =
+    currentAccount();
 
   if (!account) return;
 
+  recalculateOpenings(
+    account
+  );
+
   const ledger =
-    findLedger(account, ledgerId);
+    findLedger(
+      account,
+      ledgerId
+    );
 
   if (!ledger) {
-    alert("Ledger not found.");
+
+    alert(
+      "Ledger not found."
+    );
+
     return;
+
   }
 
   const totals =
@@ -1857,646 +3129,579 @@ function printDailyLedger(ledgerId) {
 
   let rows = "";
 
-  const transactions =
-    ledger.transactions || [];
+  (
+    ledger.transactions || []
+  ).forEach(transaction => {
 
-  transactions.forEach(
-    (transaction, index) => {
+    const amount =
+      Number(transaction.amount) || 0;
 
-      const amount =
-        Number(transaction.amount) || 0;
+    const isCredit =
+      transaction.type === "credit";
 
-      const isCredit =
-        transaction.type === "credit";
+    if (isCredit) {
+      running += amount;
+    }
+    else {
+      running -= amount;
+    }
 
-      if (isCredit) {
-        running += amount;
-      } else {
-        running -= amount;
-      }
+    rows += `
 
-      rows += `
-        <tr>
+      <tr>
 
-          <td class="number">
-            ${index + 1}
-          </td>
+        <td>
 
-          <td>
-            ${formatDate(ledger.date)}
-          </td>
-
-          <td>
-            <span class="${
+          <span
+            class="${
               isCredit
-                ? "credit-badge"
-                : "expense-badge"
-            }">
-              ${
-                isCredit
-                  ? "CREDIT"
-                  : "EXPENSE"
-              }
-            </span>
-          </td>
-
-          <td>
-            ${escapeHTML(
-              transaction.description
-            )}
-          </td>
-
-          <td class="amount ${
-            isCredit
-              ? "credit"
-              : "expense"
-          }">
+                ? "credit"
+                : "expense"
+            }"
+          >
 
             ${
               isCredit
-                ? "+"
-                : "-"
-            }${money(amount)}
+                ? "CREDIT"
+                : "EXPENSE"
+            }
 
-          </td>
+          </span>
 
-          <td class="balance">
-            ${money(running)}
-          </td>
+        </td>
 
-        </tr>
-      `;
-    }
-  );
+        <td>
+          ${escapeHTML(
+            transaction.description
+          )}
+        </td>
+
+        <td class="right">
+
+          ${
+            isCredit
+              ? "+"
+              : "-"
+          }${money(amount)}
+
+        </td>
+
+        <td class="right">
+          ${money(running)}
+        </td>
+
+      </tr>
+
+    `;
+
+  });
 
   if (!rows) {
+
     rows = `
+
       <tr>
-        <td
-          colspan="6"
-          class="no-data"
+
+        <td colspan="4"
+            style="text-align:center;"
         >
-          No transactions recorded
-          for this day.
+          No transactions.
         </td>
+
       </tr>
+
     `;
+
   }
 
-  openPrintWindow(
-    `${account.name} - Daily Ledger`,
-    `
-      <div class="header">
-
-        <div class="brand">
-          WOGE LEDGER
-        </div>
-
-        <div class="company">
-          WORD OF GOD ENTERPRISES
-        </div>
-
-        <div class="subtitle">
-          BANK WORKSHOP EXPENSE & ACCOUNT LEDGER
-        </div>
-
-        <div class="date-box">
-          DAILY LEDGER<br>
-          ${formatDate(ledger.date)}
-        </div>
-
-      </div>
-
-
-      <div class="content">
-
-        <div class="gold-line"></div>
-
-        <h1>
-          ${escapeHTML(account.name)}
-          — Daily Ledger
-        </h1>
-
-        <div class="subtitle-dark">
-          ${formatDate(ledger.date)}
-        </div>
-
-
-        <div class="summary">
-
-          <div class="box">
-            <label>
-              OPENING BALANCE
-            </label>
-
-            <strong>
-              ${money(totals.opening)}
-            </strong>
-          </div>
-
-
-          <div class="box">
-            <label>
-              TOTAL CREDITS
-            </label>
-
-            <strong class="credit">
-              +${money(totals.credits)}
-            </strong>
-          </div>
-
-
-          <div class="box">
-            <label>
-              TOTAL EXPENSES
-            </label>
-
-            <strong class="expense">
-              -${money(totals.expenses)}
-            </strong>
-          </div>
-
-
-          <div class="box closing">
-            <label>
-              CLOSING BALANCE
-            </label>
-
-            <strong>
-              ${money(totals.closing)}
-            </strong>
-          </div>
-
-        </div>
-
-
-        <h3>
-          TRANSACTION DETAILS
-        </h3>
-
-
-        <table>
-
-          <thead>
-
-            <tr>
-
-              <th>
-                #
-              </th>
-
-              <th>
-                DATE
-              </th>
-
-              <th>
-                TYPE
-              </th>
-
-              <th>
-                DESCRIPTION
-              </th>
-
-              <th>
-                AMOUNT
-              </th>
-
-              <th>
-                BALANCE AFTER
-              </th>
-
-            </tr>
-
-          </thead>
-
-
-          <tbody>
-            ${rows}
-          </tbody>
-
-
-          <tfoot>
-
-            <tr>
-
-              <th colspan="5">
-                CLOSING BALANCE
-              </th>
-
-              <th>
-                ${money(totals.closing)}
-              </th>
-
-            </tr>
-
-          </tfoot>
-
-        </table>
-
-
-        <div class="closing-section">
-
-          <span>
-            DAY ENDING BALANCE
-          </span>
-
-          <strong>
-            ${money(totals.closing)}
-          </strong>
-
-        </div>
-
-
-        <div class="signature">
-          Authorized / Verified By
-        </div>
-
-
-        <div class="footer">
-
-          <strong>
-            WORD OF GOD ENTERPRISES
-          </strong>
-
-          <span>
-            WOGE Ledger • Daily Statement
-          </span>
-
-          <span>
-            Printed:
-            ${new Date().toLocaleDateString("en-IN")}
-          </span>
-
-        </div>
-
-      </div>
-    `
-  );
-}
-
-/* =========================================================
-   PRINT WINDOW
-========================================================= */
-
-function openPrintWindow(title, content) {
   const printWindow =
     window.open(
       "",
-      "_blank",
-      "width=1000,height=800"
+      "_blank"
     );
 
   if (!printWindow) {
+
     alert(
-      "Please allow pop-ups for the WOGE Ledger website."
+      "Please allow pop-ups to print the ledger."
     );
+
     return;
+
   }
 
   printWindow.document.write(`
-    <!DOCTYPE html>
 
-    <html>
+<!DOCTYPE html>
 
-    <head>
+<html>
 
-      <meta charset="UTF-8">
+<head>
 
-      <title>
-        ${escapeHTML(title)}
-      </title>
+<meta charset="UTF-8">
 
-      <style>
+<title>
+  WOGE Daily Ledger
+  ${formatDate(ledger.date)}
+</title>
 
-        @page {
-          size: A4;
-          margin: 10mm;
-        }
+<style>
 
-        * {
-          box-sizing: border-box;
-        }
+@page {
 
-        body {
-          margin: 0;
-          padding: 0;
-          font-family:
-            Arial,
-            Helvetica,
-            sans-serif;
-          color: #171717;
-          background: white;
-          font-size: 10px;
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-        }
+  size:A4 portrait;
 
-        .header {
-          position: relative;
-          background: #090909;
-          color: white;
-          padding: 22px 24px;
-          border-bottom: 5px solid #d4af37;
-        }
+  margin:12mm;
 
-        .brand {
-          color: #d4af37;
-          font-size: 11px;
-          font-weight: 800;
-          letter-spacing: 3px;
-          margin-bottom: 7px;
-        }
+}
 
-        .company {
-          font-size: 21px;
-          font-weight: 800;
-          letter-spacing: 1.5px;
-        }
+* {
 
-        .subtitle {
-          margin-top: 6px;
-          color: #bdbdbd;
-          font-size: 8px;
-          letter-spacing: 1px;
-        }
+  box-sizing:border-box;
 
-        .date-box {
-          position: absolute;
-          right: 24px;
-          top: 23px;
-          text-align: right;
-          color: #d4af37;
-          font-weight: 800;
-          font-size: 8px;
-          line-height: 1.7;
-          letter-spacing: 1px;
-        }
+}
 
-        .content {
-          padding: 18px 8px;
-        }
+body {
 
-        .gold-line {
-          height: 2px;
-          background: #d4af37;
-          margin-bottom: 17px;
-        }
+  margin:0;
 
-        h1 {
-          margin: 0;
-          font-size: 19px;
-          font-weight: 800;
-        }
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif;
 
-        h2 {
-          margin: 5px 0 0;
-          font-size: 13px;
-          font-weight: 500;
-          color: #555;
-        }
+  color:#151515;
 
-        h3 {
-          margin: 23px 0 8px;
-          font-size: 9px;
-          letter-spacing: 1.5px;
-        }
+  background:white;
 
-        .subtitle-dark {
-          color: #666;
-          margin-top: 5px;
-        }
+}
 
-        .summary {
-          display: grid;
-          grid-template-columns:
-            repeat(4, 1fr);
-          gap: 7px;
-          margin: 18px 0 23px;
-        }
+.header {
 
-        .box {
-          min-height: 65px;
-          border: 1px solid #d5d5d5;
-          border-top: 3px solid #111;
-          padding: 10px;
-        }
+  border:2px solid #b88918;
 
-        .box.closing {
-          background: #fffdf3;
-          border-color: #d4af37;
-        }
+  padding:22px;
 
-        .box label {
-          display: block;
-          color: #777;
-          font-size: 7px;
-          font-weight: 800;
-          letter-spacing: 1px;
-        }
+  position:relative;
 
-        .box strong {
-          display: block;
-          margin-top: 8px;
-          font-size: 14px;
-        }
+  margin-bottom:18px;
 
-        .credit {
-          color: #267348;
-        }
+}
 
-        .expense {
-          color: #a23931;
-        }
+.header:after {
 
-        .closing strong {
-          color: #997510;
-        }
+  content:"";
 
-        table {
-          width: 100%;
-          border-collapse: collapse;
-        }
+  position:absolute;
 
-        thead th {
-          background: #090909;
-          color: white;
-          border: 1px solid #090909;
-          padding: 8px 6px;
-          text-align: left;
-          font-size: 7px;
-          letter-spacing: .8px;
-        }
+  bottom:0;
 
-        tbody td,
-        tfoot th {
-          border-bottom: 1px solid #ddd;
-          padding: 7px 6px;
-        }
+  left:0;
 
-        tbody tr:nth-child(even) {
-          background: #fafafa;
-        }
+  right:0;
 
-        tfoot th {
-          background: #fffdf3;
-          border-top: 2px solid #d4af37;
-          font-weight: 800;
-        }
+  height:5px;
 
-        .number {
-          text-align: center;
-          color: #888;
-        }
+  background:#b88918;
 
-        .amount,
-        .balance {
-          text-align: right;
-          white-space: nowrap;
-          font-weight: 700;
-        }
+}
 
-        .credit-badge,
-        .expense-badge {
-          display: inline-block;
-          padding: 3px 6px;
-          border-radius: 2px;
-          font-size: 6px;
-          font-weight: 800;
-          letter-spacing: .5px;
-        }
+.brand {
 
-        .credit-badge {
-          color: #176239;
-          border: 1px solid #8bc9a3;
-          background: #f1faf4;
-        }
+  font-size:20px;
 
-        .expense-badge {
-          color: #9b3129;
-          border: 1px solid #e0aaa5;
-          background: #fff5f4;
-        }
+  font-weight:800;
 
-        .no-data {
-          text-align: center;
-          padding: 30px;
-          color: #777;
-        }
+  letter-spacing:3px;
 
-        .closing-section {
-          margin-top: 18px;
-          padding: 13px 16px;
-          border: 1px solid #d4af37;
-          background: #fffdf3;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          font-weight: 800;
-          font-size: 9px;
-          letter-spacing: 1px;
-        }
+}
 
-        .closing-section strong {
-          color: #997510;
-          font-size: 18px;
-        }
+.subtitle {
 
-        .signature {
-          margin-top: 38px;
-          margin-left: auto;
-          width: 170px;
-          text-align: center;
-          border-top: 1px solid #555;
-          padding-top: 5px;
-          font-size: 8px;
-          color: #666;
-        }
+  margin-top:6px;
 
-        .footer {
-          margin-top: 30px;
-          padding-top: 9px;
-          border-top: 1px solid #d4af37;
-          display: flex;
-          justify-content: space-between;
-          gap: 10px;
-          color: #777;
-          font-size: 7px;
-        }
+  color:#8a6918;
 
-        .footer strong {
-          color: #171717;
-          letter-spacing: 1px;
-        }
+  font-size:10px;
 
-        @media print {
+  letter-spacing:2px;
 
-          body {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
+  font-weight:bold;
 
-          .header,
-          thead th {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
+}
 
-        }
+.title {
 
-      </style>
+  margin-top:18px;
 
-    </head>
+  font-size:26px;
 
-    <body>
+  font-weight:800;
 
-      ${content}
+}
 
-      <script>
+.meta {
 
-        window.onload = function() {
+  margin-top:7px;
 
-          setTimeout(
-            function() {
-              window.print();
-            },
-            400
-          );
+  color:#555;
 
-        };
+  font-size:13px;
 
-      <\/script>
+}
 
-    </body>
+.summary {
 
-    </html>
+  display:grid;
+
+  grid-template-columns:
+    repeat(4,1fr);
+
+  gap:9px;
+
+  margin:18px 0;
+
+}
+
+.box {
+
+  border:1px solid #c7c7c7;
+
+  background:#fafafa;
+
+  padding:13px;
+
+}
+
+.box.highlight {
+
+  border:2px solid #b88918;
+
+  background:#fffaf0;
+
+}
+
+.label {
+
+  font-size:9px;
+
+  color:#777;
+
+  font-weight:bold;
+
+  letter-spacing:1px;
+
+}
+
+.value {
+
+  font-size:16px;
+
+  font-weight:800;
+
+  margin-top:7px;
+
+}
+
+table {
+
+  width:100%;
+
+  border-collapse:collapse;
+
+  font-size:11px;
+
+}
+
+th {
+
+  background:#171717;
+
+  color:#d7b34d;
+
+  padding:10px 8px;
+
+  text-align:left;
+
+  border:1px solid #171717;
+
+}
+
+td {
+
+  border:1px solid #d4d4d4;
+
+  padding:9px 8px;
+
+}
+
+tfoot td {
+
+  background:#fff8e8;
+
+  border-top:2px solid #b88918;
+
+  font-weight:bold;
+
+}
+
+.right {
+
+  text-align:right;
+
+}
+
+.credit {
+
+  font-weight:bold;
+
+  color:#6c5415;
+
+}
+
+.expense {
+
+  font-weight:bold;
+
+  color:#333;
+
+}
+
+.footer {
+
+  margin-top:28px;
+
+  padding-top:10px;
+
+  border-top:1px solid #b88918;
+
+  display:flex;
+
+  justify-content:space-between;
+
+  font-size:9px;
+
+  color:#777;
+
+}
+
+@media print {
+
+  body {
+
+    -webkit-print-color-adjust:exact;
+
+    print-color-adjust:exact;
+
+  }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+
+<div class="header">
+
+  <div class="brand">
+    WORD OF GOD ENTERPRISES
+  </div>
+
+  <div class="subtitle">
+    OFFICIAL BANK WORKSHOP EXPENSE LEDGER
+  </div>
+
+  <div class="title">
+    DAILY LEDGER
+  </div>
+
+  <div class="meta">
+
+    Account:
+    ${escapeHTML(account.name)}
+
+    &nbsp; • &nbsp;
+
+    Date:
+    ${formatDate(ledger.date)}
+
+  </div>
+
+</div>
+
+
+<div class="summary">
+
+  <div class="box">
+
+    <div class="label">
+      OPENING BALANCE
+    </div>
+
+    <div class="value">
+      ${money(totals.opening)}
+    </div>
+
+  </div>
+
+
+  <div class="box">
+
+    <div class="label">
+      TOTAL CREDITS
+    </div>
+
+    <div class="value">
+      ${money(totals.credits)}
+    </div>
+
+  </div>
+
+
+  <div class="box">
+
+    <div class="label">
+      TOTAL EXPENSES
+    </div>
+
+    <div class="value">
+      ${money(totals.expenses)}
+    </div>
+
+  </div>
+
+
+  <div class="box highlight">
+
+    <div class="label">
+      CLOSING BALANCE
+    </div>
+
+    <div class="value">
+      ${money(totals.closing)}
+    </div>
+
+  </div>
+
+</div>
+
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>TYPE</th>
+
+<th>DESCRIPTION</th>
+
+<th>AMOUNT</th>
+
+<th>BALANCE AFTER</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+${rows}
+
+</tbody>
+
+<tfoot>
+
+<tr>
+
+<td colspan="3">
+  CLOSING BALANCE
+</td>
+
+<td class="right">
+  ${money(totals.closing)}
+</td>
+
+</tr>
+
+</tfoot>
+
+</table>
+
+
+<div class="footer">
+
+  <span>
+    WORD OF GOD ENTERPRISES
+  </span>
+
+  <span>
+    Generated:
+    ${formatDate(today())}
+  </span>
+
+</div>
+
+
+<script>
+
+window.onload = function() {
+
+  setTimeout(
+    function() {
+      window.print();
+    },
+    400
+  );
+
+};
+
+<\/script>
+
+</body>
+
+</html>
+
   `);
 
   printWindow.document.close();
+
 }
+
 
 /* =========================================================
    GENERAL PRINT
 ========================================================= */
 
 function printCurrentPage() {
+
   window.print();
+
 }
+
 
 /* =========================================================
    BANK ACCOUNTS
 ========================================================= */
 
 function renderAccounts() {
+
   renderAllAccountSelects();
 
   const container =
-    document.getElementById("accountList");
+    document.getElementById(
+      "accountList"
+    );
 
   if (!container) return;
 
   container.innerHTML = "";
 
   data.accounts.forEach(account => {
+
     recalculateOpenings(account);
 
     const ledgers =
@@ -2506,11 +3711,16 @@ function renderAccounts() {
     let expenses = 0;
 
     ledgers.forEach(ledger => {
+
       const totals =
         ledgerTotals(ledger);
 
-      credits += totals.credits;
-      expenses += totals.expenses;
+      credits +=
+        totals.credits;
+
+      expenses +=
+        totals.expenses;
+
     });
 
     const balance =
@@ -2525,6 +3735,7 @@ function renderAccounts() {
       "account-card";
 
     card.innerHTML = `
+
       <div class="eyebrow">
         BANK ACCOUNT
       </div>
@@ -2591,7 +3802,11 @@ function renderAccounts() {
             ? `
               <button
                 class="btn danger"
-                onclick="removeAccount('${account.id}')"
+                onclick="
+                  removeAccount(
+                    '${account.id}'
+                  )
+                "
               >
                 Delete
               </button>
@@ -2600,85 +3815,154 @@ function renderAccounts() {
         }
 
       </div>
+
     `;
 
     container.appendChild(card);
+
   });
+
 }
 
-function useAccount(id) {
-  if (!getAccount(id)) return;
 
-  data.selectedAccount = id;
+/* =========================================================
+   USE ACCOUNT
+========================================================= */
+
+function useAccount(id) {
+
+  if (!findAccount(id)) return;
+
+  data.selectedAccount =
+    id;
 
   saveData();
 
   renderAll();
 
-  const nav =
+  showPage(
+    "daily",
     document.querySelector(
-      '[onclick*="daily"]'
-    );
+      '[onclick*="showPage(\'daily\'"]'
+    )
+  );
 
-  showPage("daily", nav);
 }
+
 
 /* =========================================================
    ADD ACCOUNT
 ========================================================= */
 
 function openAccount() {
+
   const name =
-    document.getElementById("accountName");
+    document.getElementById(
+      "accountName"
+    );
 
   const opening =
-    document.getElementById("accountOpening");
+    document.getElementById(
+      "accountOpening"
+    );
 
-  if (name) name.value = "";
-  if (opening) opening.value = "";
+  if (name) {
+    name.value = "";
+  }
 
-  document
-    .getElementById("accountModal")
-    ?.classList.add("show");
+  if (opening) {
+    opening.value = "";
+  }
+
+  const modal =
+    document.getElementById(
+      "accountModal"
+    );
+
+  if (modal) {
+
+    modal.style.zIndex =
+      "6000";
+
+    modal.classList.add(
+      "show"
+    );
+
+  }
+
 }
+
 
 function closeAccount() {
-  document
-    .getElementById("accountModal")
-    ?.classList.remove("show");
+
+  const modal =
+    document.getElementById(
+      "accountModal"
+    );
+
+  if (modal) {
+
+    modal.classList.remove(
+      "show"
+    );
+
+  }
+
 }
 
+
 function saveAccount() {
+
   const name =
-    document
-      .getElementById("accountName")
-      ?.value.trim();
+    document.getElementById(
+      "accountName"
+    )?.value.trim();
 
   const opening =
     Number(
-      document
-        .getElementById("accountOpening")
-        ?.value
+      document.getElementById(
+        "accountOpening"
+      )?.value
     );
 
   if (!name) {
-    alert("Please enter bank account name.");
+
+    alert(
+      "Please enter bank account name."
+    );
+
     return;
+
   }
 
-  if (!Number.isFinite(opening) || opening < 0) {
-    alert("Please enter a valid opening balance.");
+  if (
+    !Number.isFinite(opening) ||
+    opening < 0
+  ) {
+
+    alert(
+      "Opening balance cannot be negative."
+    );
+
     return;
+
   }
 
   const account = {
+
     id: createId(),
+
     name,
+
     opening,
+
     ledgers: []
+
   };
 
-  data.accounts.push(account);
+  data.accounts.push(
+    account
+  );
 
   data.selectedAccount =
     account.id;
@@ -2688,28 +3972,38 @@ function saveAccount() {
   closeAccount();
 
   renderAll();
+
 }
+
 
 /* =========================================================
    DELETE ACCOUNT
 ========================================================= */
 
 function removeAccount(id) {
-  if (data.accounts.length <= 1) {
+
+  if (
+    data.accounts.length <= 1
+  ) {
+
     alert(
       "At least one bank account must remain."
     );
+
     return;
+
   }
 
   const account =
-    getAccount(id);
+    findAccount(id);
 
   if (!account) return;
 
   if (
     !confirm(
-      `Delete ${account.name} and ALL its daily ledgers?`
+      "Delete " +
+      account.name +
+      " and ALL its daily ledgers?"
     )
   ) {
     return;
@@ -2717,102 +4011,165 @@ function removeAccount(id) {
 
   data.accounts =
     data.accounts.filter(
-      item => item.id !== id
+      item =>
+        item.id !== id
     );
 
-  data.selectedAccount =
-    data.accounts[0].id;
+  if (
+    data.selectedAccount === id
+  ) {
+
+    data.selectedAccount =
+      data.accounts[0].id;
+
+  }
 
   saveData();
 
   renderAll();
+
 }
+
 
 /* =========================================================
    NAVIGATION
 ========================================================= */
 
-function showPage(page, button) {
+function showPage(
+  page,
+  button
+) {
+
   const pages = [
+
     "dashboardPage",
     "dailyPage",
     "monthlyPage",
     "accountsPage",
     "backupPage"
+
   ];
 
   pages.forEach(id => {
+
     const element =
       document.getElementById(id);
 
     if (element) {
-      element.classList.add("hidden");
+
+      element.classList.add(
+        "hidden"
+      );
+
     }
+
   });
 
-  const selected =
+  const target =
     document.getElementById(
-      `${page}Page`
+      page + "Page"
     );
 
-  if (selected) {
-    selected.classList.remove("hidden");
+  if (target) {
+
+    target.classList.remove(
+      "hidden"
+    );
+
   }
 
   document
     .querySelectorAll(".nav")
     .forEach(nav => {
-      nav.classList.remove("active");
+
+      nav.classList.remove(
+        "active"
+      );
+
     });
 
   if (button) {
-    button.classList.add("active");
+
+    button.classList.add(
+      "active"
+    );
+
   }
 
   const titles = {
-    dashboard: "Dashboard",
-    daily: "Daily Ledgers",
-    monthly: "Monthly Summary",
-    accounts: "Bank Accounts",
-    backup: "Backup & Data"
+
+    dashboard:
+      "Dashboard",
+
+    daily:
+      "Daily Ledgers",
+
+    monthly:
+      "Monthly Summary",
+
+    accounts:
+      "Bank Accounts",
+
+    backup:
+      "Backup & Data"
+
   };
 
-  const title =
-    document.getElementById("pageTitle");
+  setText(
+    "pageTitle",
+    titles[page] || ""
+  );
 
-  if (title) {
-    title.textContent =
-      titles[page] || "Dashboard";
-  }
 
   if (page === "dashboard") {
+
     renderDashboard();
+
   }
 
   if (page === "daily") {
+
     renderDailyLedgers();
+
   }
 
   if (page === "monthly") {
+
     renderMonthlySummary();
+
   }
 
   if (page === "accounts") {
+
     renderAccounts();
+
   }
+
 }
 
+
 /* =========================================================
-   BACKUP
+   BACKUP EXPORT
 ========================================================= */
 
 function exportBackup() {
+
   const backup = {
-    application: "WOGE Ledger",
-    company: "WORD OF GOD ENTERPRISES",
-    version: "2.0",
-    exported: new Date().toISOString(),
-    data: data
+
+    application:
+      "WOGE Ledger",
+
+    company:
+      "WORD OF GOD ENTERPRISES",
+
+    version:
+      "3.0",
+
+    exported:
+      new Date().toISOString(),
+
+    data
+
   };
 
   const blob =
@@ -2825,37 +4182,57 @@ function exportBackup() {
         )
       ],
       {
-        type: "application/json"
+        type:
+          "application/json"
       }
     );
 
   const url =
-    URL.createObjectURL(blob);
+    URL.createObjectURL(
+      blob
+    );
 
   const link =
     document.createElement("a");
 
-  link.href = url;
+  link.href =
+    url;
 
   link.download =
-    `WOGE-Ledger-Backup-${today()}.json`;
+    "WOGE-Ledger-Backup-" +
+    today() +
+    ".json";
 
-  document.body.appendChild(link);
+  document.body.appendChild(
+    link
+  );
 
   link.click();
 
   link.remove();
 
-  URL.revokeObjectURL(url);
+  URL.revokeObjectURL(
+    url
+  );
+
 }
 
-async function importBackup(event) {
+
+/* =========================================================
+   BACKUP IMPORT
+========================================================= */
+
+async function importBackup(
+  event
+) {
+
   const file =
     event.target.files?.[0];
 
   if (!file) return;
 
   try {
+
     const text =
       await file.text();
 
@@ -2863,39 +4240,25 @@ async function importBackup(event) {
       JSON.parse(text);
 
     const importedData =
-      imported.data || imported;
+      imported.data ||
+      imported;
 
     if (
       !Array.isArray(
         importedData.accounts
       )
     ) {
+
       throw new Error(
-        "Invalid backup file"
+        "Invalid backup"
       );
+
     }
 
-    importedData.accounts.forEach(account => {
-      if (!Array.isArray(account.ledgers)) {
-        account.ledgers = [];
-      }
-
-      account.ledgers.forEach(ledger => {
-        if (!Array.isArray(ledger.transactions)) {
-          ledger.transactions = [];
-        }
-      });
-    });
-
-    data = importedData;
-
-    if (
-      !data.selectedAccount ||
-      !getAccount(data.selectedAccount)
-    ) {
-      data.selectedAccount =
-        data.accounts[0]?.id || null;
-    }
+    data =
+      normalizeData(
+        importedData
+      );
 
     saveData();
 
@@ -2904,22 +4267,29 @@ async function importBackup(event) {
     alert(
       "Backup imported successfully."
     );
-  } catch (error) {
+
+  }
+  catch (error) {
+
     console.error(error);
 
     alert(
       "Could not import this backup file."
     );
+
   }
 
   event.target.value = "";
+
 }
+
 
 /* =========================================================
    CLEAR DATA
 ========================================================= */
 
 function clearAllData() {
+
   if (
     !confirm(
       "WARNING!\n\n" +
@@ -2934,22 +4304,281 @@ function clearAllData() {
   }
 
   data =
-    JSON.parse(
-      JSON.stringify(
-        defaultData
+    normalizeData(
+      JSON.parse(
+        JSON.stringify(
+          defaultData
+        )
       )
     );
+
+  data.selectedAccount =
+    data.accounts[0]?.id ||
+    null;
 
   saveData();
 
   renderAll();
+
 }
 
+
 /* =========================================================
-   INITIALIZATION
+   HELPER: SET TEXT
+========================================================= */
+
+function setText(
+  id,
+  value
+) {
+
+  const element =
+    document.getElementById(id);
+
+  if (element) {
+
+    element.textContent =
+      value;
+
+  }
+
+}
+
+
+/* =========================================================
+   RENDER EVERYTHING
+========================================================= */
+
+function renderAll() {
+
+  renderAllAccountSelects();
+
+  renderDashboard();
+
+  renderDailyLedgers();
+
+  renderMonthlySummary();
+
+  renderAccounts();
+
+}
+
+
+/* =========================================================
+   DATE FILTER CHANGE
+========================================================= */
+
+document.addEventListener(
+  "change",
+  function(event) {
+
+    if (
+      event.target.id ===
+      "ledgerDate"
+    ) {
+
+      updateLedgerOpeningPreview();
+
+    }
+
+
+    if (
+      event.target.id ===
+      "ledgerAccount"
+    ) {
+
+      updateLedgerOpeningPreview();
+
+    }
+
+
+    if (
+      event.target.id ===
+      "dailyMonth"
+    ) {
+
+      renderDailyLedgers();
+
+    }
+
+
+    if (
+      event.target.id ===
+      "dailyAccount"
+    ) {
+
+      data.selectedAccount =
+        event.target.value;
+
+      saveData();
+
+      renderDailyLedgers();
+
+    }
+
+
+    if (
+      event.target.id ===
+      "monthlyMonth"
+    ) {
+
+      renderMonthlySummary();
+
+    }
+
+
+    if (
+      event.target.id ===
+      "monthlyAccount"
+    ) {
+
+      data.selectedAccount =
+        event.target.value;
+
+      saveData();
+
+      renderMonthlySummary();
+
+    }
+
+
+    if (
+      event.target.id ===
+      "dashboardMonth"
+    ) {
+
+      renderDashboard();
+
+    }
+
+
+    if (
+      event.target.id ===
+      "dashboardAccount"
+    ) {
+
+      changeAccountFromDashboard();
+
+    }
+
+  }
+);
+
+
+/* =========================================================
+   MODAL OUTSIDE CLICK
+========================================================= */
+
+document.addEventListener(
+  "click",
+  function(event) {
+
+    const dailyModal =
+      document.getElementById(
+        "dailyModal"
+      );
+
+    const transactionModal =
+      document.getElementById(
+        "transactionModal"
+      );
+
+    const accountModal =
+      document.getElementById(
+        "accountModal"
+      );
+
+
+    if (
+      dailyModal &&
+      event.target ===
+      dailyModal
+    ) {
+
+      closeDailyLedger();
+
+    }
+
+
+    if (
+      transactionModal &&
+      event.target ===
+      transactionModal
+    ) {
+
+      closeTransaction();
+
+    }
+
+
+    if (
+      accountModal &&
+      event.target ===
+      accountModal
+    ) {
+
+      closeAccount();
+
+    }
+
+  }
+);
+
+
+/* =========================================================
+   ESC KEY
+========================================================= */
+
+document.addEventListener(
+  "keydown",
+  function(event) {
+
+    if (
+      event.key !==
+      "Escape"
+    ) {
+      return;
+    }
+
+    /*
+       If transaction modal is open,
+       close ONLY transaction first.
+    */
+
+    const transactionModal =
+      document.getElementById(
+        "transactionModal"
+      );
+
+    if (
+      transactionModal &&
+      transactionModal.classList.contains(
+        "show"
+      )
+    ) {
+
+      closeTransaction();
+
+      return;
+
+    }
+
+    closeDailyLedger();
+
+    closeAccount();
+
+    closeLedgerViewer();
+
+  }
+);
+
+
+/* =========================================================
+   INITIALIZE DATES
 ========================================================= */
 
 function initializeDates() {
+
   const month =
     currentMonth();
 
@@ -2969,114 +4598,45 @@ function initializeDates() {
     );
 
   if (dashboardMonth) {
-    dashboardMonth.value = month;
+
+    dashboardMonth.value =
+      dashboardMonth.value ||
+      month;
+
   }
 
   if (dailyMonth) {
-    dailyMonth.value = month;
+
+    dailyMonth.value =
+      dailyMonth.value ||
+      month;
+
   }
 
   if (monthlyMonth) {
-    monthlyMonth.value = month;
+
+    monthlyMonth.value =
+      monthlyMonth.value ||
+      month;
+
   }
+
 }
 
-/* =========================================================
-   MODAL EVENTS
-========================================================= */
-
-document.addEventListener(
-  "click",
-  event => {
-
-    const dailyModal =
-      document.getElementById(
-        "dailyModal"
-      );
-
-    const transactionModal =
-      document.getElementById(
-        "transactionModal"
-      );
-
-    const accountModal =
-      document.getElementById(
-        "accountModal"
-      );
-
-    if (
-      event.target ===
-      dailyModal
-    ) {
-      closeDailyLedger();
-    }
-
-    if (
-      event.target ===
-      transactionModal
-    ) {
-      closeTransaction();
-    }
-
-    if (
-      event.target ===
-      accountModal
-    ) {
-      closeAccount();
-    }
-
-  }
-);
 
 /* =========================================================
-   DATE / ACCOUNT CHANGE
-========================================================= */
-
-document.addEventListener(
-  "change",
-  event => {
-
-    if (
-      event.target.id ===
-      "ledgerDate"
-    ) {
-      updateLedgerOpeningPreview();
-    }
-
-    if (
-      event.target.id ===
-      "ledgerAccount"
-    ) {
-      updateLedgerOpeningPreview();
-    }
-
-  }
-);
-
-/* =========================================================
-   ESCAPE
-========================================================= */
-
-document.addEventListener(
-  "keydown",
-  event => {
-
-    if (event.key !== "Escape") {
-      return;
-    }
-
-    closeDailyLedger();
-    closeTransaction();
-    closeAccount();
-    closeLedgerViewer();
-
-  }
-);
-
-/* =========================================================
-   START APPLICATION
+   START APP
 ========================================================= */
 
 initializeDates();
 
 renderAll();
+
+
+/* =========================================================
+   DEBUG / VERSION
+========================================================= */
+
+console.log(
+  "WOGE Ledger v3.0 loaded successfully."
+);
