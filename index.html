@@ -1,1 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#080808">
+  <title>WOGE Ledger | Word of God Enterprises</title>
+  <link rel="stylesheet" href="style.css">
+</head>
 
+<body>
+
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">W</div>
+      <div>
+        <div class="brand-title">WORD OF GOD</div>
+        <div class="brand-subtitle">ENTERPRISES</div>
+      </div>
+    </div>
+
+    <nav>
+      <button class="nav active" onclick="showPage('ledger',this)">
+        <span>▣</span> Expense Ledger
+      </button>
+
+      <button class="nav" onclick="showPage('accounts',this)">
+        <span>◈</span> Bank Accounts
+      </button>
+
+      <button class="nav" onclick="showPage('backup',this)">
+        <span>⇅</span> Backup & Data
+      </button>
+    </nav>
+
+    <div class="storage">
+      <span></span> Data saved in this browser
+    </div>
+
+  </aside>
+
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <header class="header">
+
+      <div>
+        <div class="eyebrow">BANK WORKSHOP EXPENSES</div>
+        <h1 id="pageTitle">Expense Ledger</h1>
+      </div>
+
+      <div class="header-buttons">
+        <button class="btn outline" onclick="window.print()">
+          🖨 Print / Save PDF
+        </button>
+
+        <button class="btn gold" onclick="openExpense()">
+          + New Expense
+        </button>
+      </div>
+
+    </header>
+
+
+    <!-- LEDGER PAGE -->
+    <section id="ledgerPage">
+
+      <div class="filters">
+
+        <div class="input-group">
+          <label>ACCOUNT</label>
+          <select id="accountSelect" onchange="changeAccount()"></select>
+        </div>
+
+        <div class="input-group">
+          <label>STATEMENT TITLE</label>
+          <input id="statementTitle"
+                 value="EXPENSES"
+                 oninput="render()">
+        </div>
+
+        <div class="input-group">
+          <label>FROM DATE</label>
+          <input id="fromDate"
+                 type="date"
+                 onchange="render()">
+        </div>
+
+        <div class="input-group">
+          <label>TO DATE</label>
+          <input id="toDate"
+                 type="date"
+                 onchange="render()">
+        </div>
+
+      </div>
+
+
+      <!-- STAT CARDS -->
+      <div class="cards">
+
+        <div class="card">
+          <div class="card-label">OPENING BALANCE</div>
+          <div class="card-value" id="openingBalance">₹0.00</div>
+        </div>
+
+        <div class="card">
+          <div class="card-label">TOTAL EXPENSES</div>
+          <div class="card-value" id="totalExpenses">₹0.00</div>
+        </div>
+
+        <div class="card highlight">
+          <div class="card-label">CURRENT BALANCE</div>
+          <div class="card-value" id="currentBalance">₹0.00</div>
+        </div>
+
+        <div class="card">
+          <div class="card-label">ENTRIES</div>
+          <div class="card-value" id="entryCount">0</div>
+        </div>
+
+      </div>
+
+
+      <!-- PRINTABLE LEDGER -->
+      <div class="ledger" id="printArea">
+
+        <div class="ledger-header">
+
+          <div>
+            <div class="print-brand">
+              WORD OF GOD ENTERPRISES
+            </div>
+
+            <h2 id="printTitle">EXPENSES</h2>
+
+            <div class="print-meta" id="printMeta"></div>
+          </div>
+
+          <div class="print-opening">
+            Opening Balance:
+            <strong id="printOpening">₹0.00</strong>
+          </div>
+
+        </div>
+
+
+        <div class="table-container">
+
+          <table>
+
+            <thead>
+              <tr>
+                <th>DATE</th>
+                <th>EXPENSE / DESCRIPTION</th>
+                <th class="right">AMOUNT (₹)</th>
+                <th class="right">ACCOUNT BALANCE</th>
+                <th class="actions no-print">ACTION</th>
+              </tr>
+            </thead>
+
+            <tbody id="ledgerBody"></tbody>
+
+            <tfoot>
+              <tr>
+                <td colspan="2">
+                  TOTAL EXPENSES
+                </td>
+
+                <td class="right" id="footerTotal">
+                  ₹0.00
+                </td>
+
+                <td class="right" id="footerBalance">
+                  ₹0.00
+                </td>
+
+                <td class="no-print"></td>
+              </tr>
+            </tfoot>
+
+          </table>
+
+        </div>
+
+
+        <div class="empty" id="emptyState">
+
+          <div class="empty-icon">₹</div>
+
+          <h3>No expenses yet</h3>
+
+          <p>
+            Add your first workshop expense to start the running balance.
+          </p>
+
+          <button class="btn gold" onclick="openExpense()">
+            + Add Expense
+          </button>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- ACCOUNTS PAGE -->
+    <section id="accountsPage" class="hidden">
+
+      <div class="section-title">
+
+        <div>
+          <div class="eyebrow">ACCOUNT MANAGEMENT</div>
+          <h2>Bank Accounts</h2>
+        </div>
+
+        <button class="btn gold" onclick="openAccount()">
+          + Add Account
+        </button>
+
+      </div>
+
+      <div id="accountList" class="account-grid"></div>
+
+    </section>
+
+
+    <!-- BACKUP PAGE -->
+    <section id="backupPage" class="hidden">
+
+      <div class="section-title">
+        <div>
+          <div class="eyebrow">DATA MANAGEMENT</div>
+          <h2>Backup & Data</h2>
+        </div>
+      </div>
+
+      <div class="backup-box">
+
+        <h3>Protect Your Ledger</h3>
+
+        <p>
+          Your expenses are stored locally in this browser.
+          Export a backup regularly if your data is important.
+        </p>
+
+        <div class="backup-buttons">
+
+          <button class="btn gold" onclick="exportBackup()">
+            Export Backup
+          </button>
+
+          <label class="btn outline">
+            Import Backup
+            <input
+              type="file"
+              id="importFile"
+              accept=".json"
+              onchange="importBackup(event)"
+              hidden>
+          </label>
+
+          <button class="btn danger" onclick="clearAllData()">
+            Clear All Data
+          </button>
+
+        </div>
+
+        <div class="tip">
+          <b>Print / Save PDF</b> creates a printable statement.
+          <br>
+          <b>Export Backup</b> creates a restorable data file.
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+</div>
+
+
+<!-- EXPENSE MODAL -->
+
+<div class="modal" id="expenseModal">
+
+  <div class="modal-box">
+
+    <div class="modal-header">
+
+      <div>
+        <div class="eyebrow">LEDGER ENTRY</div>
+        <h2 id="expenseModalTitle">New Expense</h2>
+      </div>
+
+      <button class="close" onclick="closeExpense()">×</button>
+
+    </div>
+
+
+    <input type="hidden" id="editingId">
+
+    <div class="form-grid">
+
+      <div class="input-group">
+        <label>DATE</label>
+        <input id="expenseDate" type="date">
+      </div>
+
+      <div class="input-group">
+        <label>AMOUNT (₹)</label>
+        <input id="expenseAmount"
+               type="number"
+               min="0.01"
+               step="0.01"
+               placeholder="0.00">
+      </div>
+
+      <div class="input-group full">
+        <label>EXPENSE / DESCRIPTION</label>
+        <input id="expenseDescription"
+               placeholder="Petrol, Stationery, Hotel, Travel etc.">
+      </div>
+
+    </div>
+
+
+    <div class="modal-buttons">
+
+      <button class="btn outline" onclick="closeExpense()">
+        Cancel
+      </button>
+
+      <button class="btn gold" onclick="saveExpense()">
+        Save Expense
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<!-- ACCOUNT MODAL -->
+
+<div class="modal" id="accountModal">
+
+  <div class="modal-box">
+
+    <div class="modal-header">
+
+      <div>
+        <div class="eyebrow">ACCOUNT SETUP</div>
+        <h2>New Bank Account</h2>
+      </div>
+
+      <button class="close" onclick="closeAccount()">×</button>
+
+    </div>
+
+
+    <div class="form-grid">
+
+      <div class="input-group">
+        <label>BANK / ACCOUNT NAME</label>
+        <input id="accountName"
+               placeholder="SBI">
+      </div>
+
+      <div class="input-group">
+        <label>OPENING BALANCE (₹)</label>
+        <input id="accountOpening"
+               type="number"
+               min="0"
+               step="0.01"
+               placeholder="46000">
+      </div>
+
+    </div>
+
+
+    <div class="modal-buttons">
+
+      <button class="btn outline" onclick="closeAccount()">
+        Cancel
+      </button>
+
+      <button class="btn gold" onclick="saveAccount()">
+        Create Account
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script src="app.js"></script>
+
+</body>
+</html>
