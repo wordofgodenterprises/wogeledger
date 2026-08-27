@@ -2014,24 +2014,20 @@ function saveTransaction() {
   const account =
     currentAccount();
 
-
   const ledgerId =
     document.getElementById(
       "transactionLedgerId"
     ).value;
-
 
   const transactionId =
     document.getElementById(
       "transactionId"
     ).value;
 
-
   const type =
     document.getElementById(
       "transactionType"
     ).value;
-
 
   const amount =
     Number(
@@ -2040,12 +2036,15 @@ function saveTransaction() {
       ).value
     );
 
-
   const description =
     document.getElementById(
       "transactionDescription"
     ).value.trim();
 
+
+  /* -----------------------------
+     VALIDATION
+  ----------------------------- */
 
   if (!amount || amount <= 0) {
 
@@ -2056,6 +2055,179 @@ function saveTransaction() {
     return;
 
   }
+
+
+  if (!description) {
+
+    alert(
+      "Please enter a description."
+    );
+
+    return;
+
+  }
+
+
+  const ledger =
+    findLedger(
+      account,
+      ledgerId
+    );
+
+
+  if (!ledger) {
+
+    alert(
+      "Ledger not found."
+    );
+
+    return;
+
+  }
+
+
+  if (!ledger.transactions) {
+
+    ledger.transactions = [];
+
+  }
+
+
+  /* -----------------------------
+     EDIT EXISTING TRANSACTION
+  ----------------------------- */
+
+  if (transactionId) {
+
+    const index =
+      ledger.transactions.findIndex(
+        transaction =>
+          transaction.id ===
+          transactionId
+      );
+
+
+    if (index !== -1) {
+
+      ledger.transactions[index] = {
+
+        ...ledger.transactions[index],
+
+        type: type,
+
+        amount: amount,
+
+        description: description
+
+      };
+
+    }
+
+  }
+
+
+  /* -----------------------------
+     ADD NEW TRANSACTION
+  ----------------------------- */
+
+  else {
+
+    ledger.transactions.push({
+
+      id: createId(),
+
+      type: type,
+
+      amount: amount,
+
+      description: description,
+
+      created: Date.now()
+
+    });
+
+  }
+
+
+  /* -----------------------------
+     SAVE DATA
+  ----------------------------- */
+
+  recalculateOpenings(
+    account
+  );
+
+  saveData();
+
+
+  /* -----------------------------
+     REFRESH LEDGER
+  ----------------------------- */
+
+  openLedgerDetails(
+    ledgerId
+  );
+
+
+  renderAll();
+
+
+  /* -----------------------------
+     KEEP TRANSACTION WINDOW OPEN
+     FOR QUICK ENTRY
+  ----------------------------- */
+
+  document.getElementById(
+    "transactionId"
+  ).value = "";
+
+
+  document.getElementById(
+    "transactionType"
+  ).value = "expense";
+
+
+  document.getElementById(
+    "transactionAmount"
+  ).value = "";
+
+
+  document.getElementById(
+    "transactionDescription"
+  ).value = "";
+
+
+  document.getElementById(
+    "transactionTitle"
+  ).textContent =
+    "Add Transaction";
+
+
+  /*
+     Keep the transaction modal open.
+     This allows continuous entry of
+     multiple expenses/credits.
+  */
+
+  document.getElementById(
+    "transactionModal"
+  ).classList.add(
+    "show"
+  );
+
+
+  setTimeout(
+    function() {
+
+      document.getElementById(
+        "transactionDescription"
+      ).focus();
+
+    },
+    100
+  );
+
+}
 
 
   if (!description) {
