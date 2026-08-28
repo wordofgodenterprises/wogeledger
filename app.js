@@ -3,7 +3,7 @@
    WORD OF GOD ENTERPRISES
 
    COMPLETE APP.JS
-   Version 3.0
+   Version 3.2 — Safe Supabase Cloud Sync
 
    FEATURES
    ---------------------------------------------------------
@@ -235,6 +235,18 @@ function saveData() {
       "Could not save data in this browser."
     );
 
+  }
+
+  /* Record the local change so multi-computer conflict handling
+     knows when this browser last changed its ledger. */
+  try {
+    wogeSetLocalMeta({
+      ...wogeGetLocalMeta(),
+      deviceId: wogeDeviceId(),
+      updatedAt: new Date().toISOString()
+    });
+  } catch (metaError) {
+    console.error("WOGE local timestamp error:", metaError);
   }
 
   /* Cloud sync is automatic when Supabase is configured. */
@@ -4650,20 +4662,16 @@ renderAll();
 
 
 /* =========================================================
-   SUPABASE CLOUD SYNC
+   SUPABASE CLOUD SYNC — SAFE MULTI-COMPUTER VERSION
    ---------------------------------------------------------
-   The app keeps localStorage as an offline cache and mirrors
-   the complete WOGE_LEDGER_V2 object to one Supabase row.
-
-   Required Supabase table:
-     woge_ledger_data
-
-   Columns:
-     id   bigint primary key
-     data jsonb not null
-
-   Recommended single-row id:
-     1
+   IMPORTANT:
+   - localStorage remains an offline cache.
+   - Supabase is the shared database between computers.
+   - On FIRST connection, the copy containing more ledger data
+     wins. This prevents an empty/new office browser from
+     overwriting the existing home-computer ledgers.
+   - After the first successful connection, cloud is used as
+     the shared source and every change is uploaded.
 ========================================================= */
 
 const WOGE_SUPABASE_URL =
@@ -4675,51 +4683,39 @@ const WOGE_SUPABASE_KEY =
 const WOGE_SUPABASE_TABLE =
   "woge_ledger_data";
 
+const WOGE_CLOUD_ROW_ID = 1;
+const WOGE_LOCAL_META_KEY = "WOGE_LEDGER_CLOUD_META_V1";
+
 let wogeCloudAvailable = false;
 let wogeCloudSaveTimer = null;
 let wogeCloudSaveRunning = false;
 let wogeCloudSaveQueued = false;
 let wogeCloudRevision = 0;
+let wogeCloudInitialized = false;
 
 function wogeCloudHeaders() {
-
   return {
     "apikey": WOGE_SUPABASE_KEY,
-    "Authorization":
-      "Bearer " + WOGE_SUPABASE_KEY,
-    "Content-Type":
-      "application/json",
-    "Prefer":
-      "return=minimal"
+    "Authorization": "Bearer " + WOGE_SUPABASE_KEY,
+    "Content-Type": "application/json",
+    "Prefer": "return=minimal"
   };
-
 }
 
 function wogeCloudUrl() {
-
   return (
     WOGE_SUPABASE_URL.replace(/\/+$/, "") +
     "/rest/v1/" +
     WOGE_SUPABASE_TABLE
   );
-
 }
 
 function showCloudStatus(text, ok = true) {
-
-  let el =
-    document.getElementById(
-      "wogeCloudStatus"
-    );
+  let el = document.getElementById("wogeCloudStatus");
 
   if (!el) {
-
-    el =
-      document.createElement("div");
-
-    el.id =
-      "wogeCloudStatus";
-
+    el = document.createElement("div");
+    el.id = "wogeCloudStatus";
     el.style.cssText = `
       position:fixed;
       right:18px;
@@ -4734,234 +4730,351 @@ function showCloudStatus(text, ok = true) {
       box-shadow:0 8px 28px rgba(0,0,0,.35);
       pointer-events:none;
     `;
-
     document.body.appendChild(el);
-
   }
 
-  el.textContent =
-    ok
-      ? "☁ " + text
-      : "☁ " + text;
+  el.textContent = "☁ " + text;
+  el.style.opacity = ok ? "1" : "0.85";
+}
 
+function wogeGetLocalMeta() {
+  try {
+    const raw = localStorage.getItem(WOGE_LOCAL_META_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) || {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function wogeSetLocalMeta(meta) {
+  try {
+    localStorage.setItem(
+      WOGE_LOCAL_META_KEY,
+      JSON.stringify(meta)
+    );
+  } catch (error) {
+    console.error("WOGE local cloud meta error:", error);
+  }
+}
+
+function wogeDeviceId() {
+  const meta = wogeGetLocalMeta();
+
+  if (meta.deviceId) {
+    return meta.deviceId;
+  }
+
+  const id = createId();
+  wogeSetLocalMeta({
+    ...meta,
+    deviceId: id
+  });
+
+  return id;
+}
+
+function wogeDataStats(value) {
+  const source = value || {};
+  const accounts = Array.isArray(source.accounts)
+    ? source.accounts
+    : [];
+
+  let ledgers = 0;
+  let transactions = 0;
+
+  accounts.forEach(account => {
+    const accountLedgers = Array.isArray(account.ledgers)
+      ? account.ledgers
+      : [];
+
+    ledgers += accountLedgers.length;
+
+    accountLedgers.forEach(ledger => {
+      if (Array.isArray(ledger.transactions)) {
+        transactions += ledger.transactions.length;
+      }
+    });
+  });
+
+  return {
+    accounts: accounts.length,
+    ledgers,
+    transactions,
+    score: ledgers * 1000000 + transactions * 1000 + accounts
+  };
+}
+
+function wogeSnapshot(value) {
+  const copy = normalizeData(
+    JSON.parse(JSON.stringify(value || data))
+  );
+
+  const meta = wogeGetLocalMeta();
+
+  copy._wogeCloudMeta = {
+    deviceId: meta.deviceId || wogeDeviceId(),
+    updatedAt: new Date().toISOString(),
+    stats: wogeDataStats(copy)
+  };
+
+  return copy;
+}
+
+function wogeSnapshotStats(value) {
+  return wogeDataStats(value);
 }
 
 async function cloudGetData() {
-
-  const response =
-    await fetch(
-      wogeCloudUrl() +
-      "?id=eq.1&select=id,data",
-      {
-        method:"GET",
-        headers:wogeCloudHeaders()
-      }
-    );
+  const response = await fetch(
+    wogeCloudUrl() +
+      "?id=eq." +
+      WOGE_CLOUD_ROW_ID +
+      "&select=id,data",
+    {
+      method: "GET",
+      headers: wogeCloudHeaders()
+    }
+  );
 
   if (!response.ok) {
-
-    const body =
-      await response.text();
-
+    const body = await response.text();
     throw new Error(
       "Supabase GET " +
-      response.status +
-      ": " +
-      body
+        response.status +
+        ": " +
+        body
     );
-
   }
 
-  const rows =
-    await response.json();
-
+  const rows = await response.json();
   return rows?.[0]?.data || null;
-
 }
 
 async function cloudPutData(snapshot) {
-
-  const response =
-    await fetch(
-      wogeCloudUrl(),
-      {
-        method:"POST",
-        headers: {
-          ...wogeCloudHeaders(),
-          "Prefer":
-            "resolution=merge-duplicates,return=minimal"
-        },
-        body:JSON.stringify({
-          id:1,
-          data:snapshot
-        })
-      }
-    );
+  const response = await fetch(
+    wogeCloudUrl(),
+    {
+      method: "POST",
+      headers: {
+        ...wogeCloudHeaders(),
+        "Prefer":
+          "resolution=merge-duplicates,return=minimal"
+      },
+      body: JSON.stringify({
+        id: WOGE_CLOUD_ROW_ID,
+        data: snapshot
+      })
+    }
+  );
 
   if (!response.ok) {
-
-    const body =
-      await response.text();
-
+    const body = await response.text();
     throw new Error(
       "Supabase SAVE " +
-      response.status +
-      ": " +
-      body
+        response.status +
+        ": " +
+        body
     );
+  }
+}
 
+function wogeChooseInitialSource(localData, cloudData) {
+  if (!cloudData) {
+    return "local";
   }
 
+  const localStats = wogeSnapshotStats(localData);
+  const cloudStats = wogeSnapshotStats(cloudData);
+
+  /*
+     MOST IMPORTANT SAFETY RULE:
+     A computer with more existing ledgers wins the first
+     synchronization. Therefore the office computer cannot
+     overwrite the home computer's real ledger history simply
+     because its browser has a local copy.
+  */
+  if (localStats.ledgers > cloudStats.ledgers) {
+    return "local";
+  }
+
+  if (localStats.ledgers < cloudStats.ledgers) {
+    return "cloud";
+  }
+
+  if (localStats.transactions > cloudStats.transactions) {
+    return "local";
+  }
+
+  if (localStats.transactions < cloudStats.transactions) {
+    return "cloud";
+  }
+
+  const localMeta = wogeGetLocalMeta();
+  const cloudMeta = cloudData._wogeCloudMeta || {};
+
+  const localTime =
+    Date.parse(localMeta.updatedAt || "") || 0;
+
+  const cloudTime =
+    Date.parse(cloudMeta.updatedAt || "") || 0;
+
+  if (localTime > cloudTime) {
+    return "local";
+  }
+
+  /* If both are equally populated, cloud is authoritative. */
+  return "cloud";
 }
 
 async function initializeCloudSync() {
-
-  showCloudStatus(
-    "Cloud: Connecting…"
-  );
+  showCloudStatus("Cloud: Connecting…");
 
   try {
+    const localBefore = normalizeData(
+      JSON.parse(JSON.stringify(data))
+    );
 
-    const cloudData =
-      await cloudGetData();
+    const cloudData = await cloudGetData();
 
-    if (cloudData) {
+    if (!cloudData) {
+      /*
+         No cloud record exists yet.
+         The current computer becomes the first source.
+      */
+      const snapshot = wogeSnapshot(localBefore);
+      await cloudPutData(snapshot);
 
-      data =
-        normalizeData(
-          cloudData
-        );
+      wogeCloudAvailable = true;
+      wogeCloudInitialized = true;
 
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(data)
-      );
+      wogeSetLocalMeta({
+        ...wogeGetLocalMeta(),
+        deviceId: wogeDeviceId(),
+        updatedAt: snapshot._wogeCloudMeta.updatedAt
+      });
 
-      wogeCloudAvailable =
-        true;
-
-      showCloudStatus(
-        "Cloud: Connected"
-      );
-
-      renderAll();
-
+      showCloudStatus("Cloud: Connected");
       return;
+    }
 
+    const source = wogeChooseInitialSource(
+      localBefore,
+      cloudData
+    );
+
+    if (source === "local") {
+      /*
+         HOME COMPUTER PROTECTION:
+         If this browser contains more real ledger history,
+         upload it instead of replacing it with cloud data.
+      */
+      const snapshot = wogeSnapshot(localBefore);
+      await cloudPutData(snapshot);
+
+      wogeSetLocalMeta({
+        ...wogeGetLocalMeta(),
+        deviceId: wogeDeviceId(),
+        updatedAt: snapshot._wogeCloudMeta.updatedAt
+      });
+
+      wogeCloudAvailable = true;
+      wogeCloudInitialized = true;
+
+      showCloudStatus("Cloud: Connected • Local kept");
+      return;
     }
 
     /*
-       First device / empty cloud:
-       migrate the existing local ledger to cloud.
+       Cloud has more complete ledger history.
+       Load it into this browser.
     */
+    data = normalizeData(cloudData);
 
-    await cloudPutData(
-      normalizeData(
-        JSON.parse(
-          JSON.stringify(data)
-        )
-      )
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(data)
     );
 
-    wogeCloudAvailable =
-      true;
+    wogeSetLocalMeta({
+      ...wogeGetLocalMeta(),
+      deviceId: wogeDeviceId(),
+      updatedAt:
+        cloudData._wogeCloudMeta?.updatedAt ||
+        new Date().toISOString()
+    });
 
-    showCloudStatus(
-      "Cloud: Connected"
-    );
+    wogeCloudAvailable = true;
+    wogeCloudInitialized = true;
 
-  }
-  catch (error) {
+    renderAll();
+    showCloudStatus("Cloud: Connected • Data loaded");
 
+  } catch (error) {
     console.error(
       "WOGE Cloud initialization error:",
       error
     );
 
-    wogeCloudAvailable =
-      false;
+    wogeCloudAvailable = false;
+    wogeCloudInitialized = false;
 
     showCloudStatus(
       "Cloud: Setup needed",
       false
     );
-
   }
-
 }
 
 function scheduleCloudSave() {
-
   wogeCloudRevision++;
 
-  if (!wogeCloudAvailable) {
+  if (!wogeCloudAvailable || !wogeCloudInitialized) {
     return;
   }
 
-  clearTimeout(
-    wogeCloudSaveTimer
+  clearTimeout(wogeCloudSaveTimer);
+
+  wogeCloudSaveTimer = setTimeout(
+    () => saveToCloud(),
+    350
   );
-
-  wogeCloudSaveTimer =
-    setTimeout(
-      () => saveToCloud(),
-      350
-    );
-
 }
 
 async function saveToCloud() {
-
-  if (!wogeCloudAvailable) {
+  if (!wogeCloudAvailable || !wogeCloudInitialized) {
     return;
   }
 
   if (wogeCloudSaveRunning) {
-
-    wogeCloudSaveQueued =
-      true;
-
+    wogeCloudSaveQueued = true;
     return;
-
   }
 
-  wogeCloudSaveRunning =
-    true;
+  wogeCloudSaveRunning = true;
 
-  const revisionAtStart =
-    wogeCloudRevision;
-
-  const snapshot =
-    normalizeData(
-      JSON.parse(
-        JSON.stringify(data)
-      )
-    );
+  const revisionAtStart = wogeCloudRevision;
+  const snapshot = wogeSnapshot(data);
 
   try {
+    await cloudPutData(snapshot);
 
-    await cloudPutData(
-      snapshot
-    );
+    wogeSetLocalMeta({
+      ...wogeGetLocalMeta(),
+      deviceId: snapshot._wogeCloudMeta.deviceId,
+      updatedAt: snapshot._wogeCloudMeta.updatedAt
+    });
 
-    showCloudStatus(
-      "Cloud: Saved"
-    );
+    showCloudStatus("Cloud: Saved");
 
-    /* If something changed while saving, save again. */
     if (
       revisionAtStart !==
       wogeCloudRevision
     ) {
-
-      wogeCloudSaveQueued =
-        true;
-
+      wogeCloudSaveQueued = true;
     }
 
-  }
-  catch (error) {
-
+  } catch (error) {
     console.error(
       "WOGE Cloud save error:",
       error
@@ -4972,73 +5085,74 @@ async function saveToCloud() {
       false
     );
 
-  }
-  finally {
-
-    wogeCloudSaveRunning =
-      false;
+  } finally {
+    wogeCloudSaveRunning = false;
 
     if (wogeCloudSaveQueued) {
-
-      wogeCloudSaveQueued =
-        false;
-
+      wogeCloudSaveQueued = false;
       scheduleCloudSave();
-
     }
-
   }
-
 }
 
 async function refreshFromCloud() {
-
   if (!wogeCloudAvailable) {
-
     await initializeCloudSync();
-
     return;
-
   }
 
   try {
+    const cloudData = await cloudGetData();
 
-    const cloudData =
-      await cloudGetData();
-
-    if (cloudData) {
-
-      const activeLedgerId =
-        window.WOGE_ACTIVE_LEDGER_ID ||
-        null;
-
-      data =
-        normalizeData(
-          cloudData
-        );
-
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(data)
-      );
-
-      renderAll();
-
-      if (activeLedgerId) {
-        openLedgerDetails(
-          activeLedgerId
-        );
-      }
-
+    if (!cloudData) {
+      showCloudStatus("Cloud: Connected");
+      return;
     }
 
-    showCloudStatus(
-      "Cloud: Connected"
+    const cloudMeta = cloudData._wogeCloudMeta || {};
+    const localMeta = wogeGetLocalMeta();
+
+    const cloudTime =
+      Date.parse(cloudMeta.updatedAt || "") || 0;
+
+    const localTime =
+      Date.parse(localMeta.updatedAt || "") || 0;
+
+    /*
+       Only replace local data when cloud is newer.
+       This prevents a background refresh from erasing a local
+       change that has not finished uploading yet.
+    */
+    if (cloudTime <= localTime) {
+      showCloudStatus("Cloud: Connected");
+      return;
+    }
+
+    const activeLedgerId =
+      window.WOGE_ACTIVE_LEDGER_ID || null;
+
+    data = normalizeData(cloudData);
+
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(data)
     );
 
-  }
-  catch (error) {
+    wogeSetLocalMeta({
+      ...localMeta,
+      deviceId: localMeta.deviceId || wogeDeviceId(),
+      updatedAt: cloudMeta.updatedAt
+    });
 
+    renderAll();
+
+    if (activeLedgerId) {
+      openLedgerDetails(activeLedgerId);
+    }
+
+    showCloudStatus("Cloud: Updated");
+
+  } catch (error) {
     console.error(
       "WOGE Cloud refresh error:",
       error
@@ -5048,9 +5162,7 @@ async function refreshFromCloud() {
       "Cloud: Refresh error",
       false
     );
-
   }
-
 }
 
 /* =========================================================
@@ -5253,5 +5365,5 @@ setTimeout(
 ========================================================= */
 
 console.log(
-  "WOGE Ledger v3.1 — Cloud Sync loaded successfully."
+  "WOGE Ledger v3.2 — Safe Cloud Sync loaded successfully."
 );
