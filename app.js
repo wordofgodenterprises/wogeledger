@@ -237,6 +237,9 @@ function saveData() {
 
   }
 
+  /* Cloud sync is automatic when Supabase is configured. */
+  scheduleCloudSave();
+
 }
 
 
@@ -648,13 +651,26 @@ function renderDashboard() {
     monthInput.value = month;
   }
 
+  ensureDailyDateFilter();
+
   recalculateOpenings(account);
 
-  const ledgers =
+  let ledgers =
     getMonthLedgers(
       account,
       month
     );
+
+  const dateFilter =
+    document.getElementById(
+      "wogeDailyDateFilter"
+    )?.value || "";
+
+  if (dateFilter) {
+    ledgers = ledgers.filter(
+      ledger => ledger.date === dateFilter
+    );
+  }
 
   let opening =
     Number(account.opening) || 0;
@@ -4634,9 +4650,608 @@ renderAll();
 
 
 /* =========================================================
+   SUPABASE CLOUD SYNC
+   ---------------------------------------------------------
+   The app keeps localStorage as an offline cache and mirrors
+   the complete WOGE_LEDGER_V2 object to one Supabase row.
+
+   Required Supabase table:
+     woge_ledger_data
+
+   Columns:
+     id   bigint primary key
+     data jsonb not null
+
+   Recommended single-row id:
+     1
+========================================================= */
+
+const WOGE_SUPABASE_URL =
+  "https://yiyzphyzlbwscspjuajf.supabase.co";
+
+const WOGE_SUPABASE_KEY =
+  "sb_publishable_sJok3gccMB0UZsf-WTIuHw_Dsb-sTro";
+
+const WOGE_SUPABASE_TABLE =
+  "woge_ledger_data";
+
+let wogeCloudAvailable = false;
+let wogeCloudSaveTimer = null;
+let wogeCloudSaveRunning = false;
+let wogeCloudSaveQueued = false;
+let wogeCloudRevision = 0;
+
+function wogeCloudHeaders() {
+
+  return {
+    "apikey": WOGE_SUPABASE_KEY,
+    "Authorization":
+      "Bearer " + WOGE_SUPABASE_KEY,
+    "Content-Type":
+      "application/json",
+    "Prefer":
+      "return=minimal"
+  };
+
+}
+
+function wogeCloudUrl() {
+
+  return (
+    WOGE_SUPABASE_URL.replace(/\/+$/, "") +
+    "/rest/v1/" +
+    WOGE_SUPABASE_TABLE
+  );
+
+}
+
+function showCloudStatus(text, ok = true) {
+
+  let el =
+    document.getElementById(
+      "wogeCloudStatus"
+    );
+
+  if (!el) {
+
+    el =
+      document.createElement("div");
+
+    el.id =
+      "wogeCloudStatus";
+
+    el.style.cssText = `
+      position:fixed;
+      right:18px;
+      bottom:18px;
+      z-index:999999;
+      padding:9px 14px;
+      border:1px solid #b88918;
+      border-radius:999px;
+      background:#0d0d0d;
+      color:#d7b34d;
+      font:600 12px Arial,sans-serif;
+      box-shadow:0 8px 28px rgba(0,0,0,.35);
+      pointer-events:none;
+    `;
+
+    document.body.appendChild(el);
+
+  }
+
+  el.textContent =
+    ok
+      ? "☁ " + text
+      : "☁ " + text;
+
+}
+
+async function cloudGetData() {
+
+  const response =
+    await fetch(
+      wogeCloudUrl() +
+      "?id=eq.1&select=id,data",
+      {
+        method:"GET",
+        headers:wogeCloudHeaders()
+      }
+    );
+
+  if (!response.ok) {
+
+    const body =
+      await response.text();
+
+    throw new Error(
+      "Supabase GET " +
+      response.status +
+      ": " +
+      body
+    );
+
+  }
+
+  const rows =
+    await response.json();
+
+  return rows?.[0]?.data || null;
+
+}
+
+async function cloudPutData(snapshot) {
+
+  const response =
+    await fetch(
+      wogeCloudUrl(),
+      {
+        method:"POST",
+        headers: {
+          ...wogeCloudHeaders(),
+          "Prefer":
+            "resolution=merge-duplicates,return=minimal"
+        },
+        body:JSON.stringify({
+          id:1,
+          data:snapshot
+        })
+      }
+    );
+
+  if (!response.ok) {
+
+    const body =
+      await response.text();
+
+    throw new Error(
+      "Supabase SAVE " +
+      response.status +
+      ": " +
+      body
+    );
+
+  }
+
+}
+
+async function initializeCloudSync() {
+
+  showCloudStatus(
+    "Cloud: Connecting…"
+  );
+
+  try {
+
+    const cloudData =
+      await cloudGetData();
+
+    if (cloudData) {
+
+      data =
+        normalizeData(
+          cloudData
+        );
+
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(data)
+      );
+
+      wogeCloudAvailable =
+        true;
+
+      showCloudStatus(
+        "Cloud: Connected"
+      );
+
+      renderAll();
+
+      return;
+
+    }
+
+    /*
+       First device / empty cloud:
+       migrate the existing local ledger to cloud.
+    */
+
+    await cloudPutData(
+      normalizeData(
+        JSON.parse(
+          JSON.stringify(data)
+        )
+      )
+    );
+
+    wogeCloudAvailable =
+      true;
+
+    showCloudStatus(
+      "Cloud: Connected"
+    );
+
+  }
+  catch (error) {
+
+    console.error(
+      "WOGE Cloud initialization error:",
+      error
+    );
+
+    wogeCloudAvailable =
+      false;
+
+    showCloudStatus(
+      "Cloud: Setup needed",
+      false
+    );
+
+  }
+
+}
+
+function scheduleCloudSave() {
+
+  wogeCloudRevision++;
+
+  if (!wogeCloudAvailable) {
+    return;
+  }
+
+  clearTimeout(
+    wogeCloudSaveTimer
+  );
+
+  wogeCloudSaveTimer =
+    setTimeout(
+      () => saveToCloud(),
+      350
+    );
+
+}
+
+async function saveToCloud() {
+
+  if (!wogeCloudAvailable) {
+    return;
+  }
+
+  if (wogeCloudSaveRunning) {
+
+    wogeCloudSaveQueued =
+      true;
+
+    return;
+
+  }
+
+  wogeCloudSaveRunning =
+    true;
+
+  const revisionAtStart =
+    wogeCloudRevision;
+
+  const snapshot =
+    normalizeData(
+      JSON.parse(
+        JSON.stringify(data)
+      )
+    );
+
+  try {
+
+    await cloudPutData(
+      snapshot
+    );
+
+    showCloudStatus(
+      "Cloud: Saved"
+    );
+
+    /* If something changed while saving, save again. */
+    if (
+      revisionAtStart !==
+      wogeCloudRevision
+    ) {
+
+      wogeCloudSaveQueued =
+        true;
+
+    }
+
+  }
+  catch (error) {
+
+    console.error(
+      "WOGE Cloud save error:",
+      error
+    );
+
+    showCloudStatus(
+      "Cloud: Save error",
+      false
+    );
+
+  }
+  finally {
+
+    wogeCloudSaveRunning =
+      false;
+
+    if (wogeCloudSaveQueued) {
+
+      wogeCloudSaveQueued =
+        false;
+
+      scheduleCloudSave();
+
+    }
+
+  }
+
+}
+
+async function refreshFromCloud() {
+
+  if (!wogeCloudAvailable) {
+
+    await initializeCloudSync();
+
+    return;
+
+  }
+
+  try {
+
+    const cloudData =
+      await cloudGetData();
+
+    if (cloudData) {
+
+      const activeLedgerId =
+        window.WOGE_ACTIVE_LEDGER_ID ||
+        null;
+
+      data =
+        normalizeData(
+          cloudData
+        );
+
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(data)
+      );
+
+      renderAll();
+
+      if (activeLedgerId) {
+        openLedgerDetails(
+          activeLedgerId
+        );
+      }
+
+    }
+
+    showCloudStatus(
+      "Cloud: Connected"
+    );
+
+  }
+  catch (error) {
+
+    console.error(
+      "WOGE Cloud refresh error:",
+      error
+    );
+
+    showCloudStatus(
+      "Cloud: Refresh error",
+      false
+    );
+
+  }
+
+}
+
+/* =========================================================
+   DAILY LEDGER DATE SELECTOR
+========================================================= */
+
+function ensureDailyDateFilter() {
+
+  const list =
+    document.getElementById(
+      "dailyLedgerList"
+    );
+
+  if (!list) {
+    return;
+  }
+
+  let bar =
+    document.getElementById(
+      "wogeDailyDateBar"
+    );
+
+  if (bar) {
+    return;
+  }
+
+  bar =
+    document.createElement("div");
+
+  bar.id =
+    "wogeDailyDateBar";
+
+  bar.style.cssText = `
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+    margin:0 0 18px;
+    padding:12px 14px;
+    border:1px solid #3a321e;
+    border-radius:12px;
+    background:#11110f;
+  `;
+
+  bar.innerHTML = `
+    <label
+      for="wogeDailyDateFilter"
+      style="
+        color:#d7b34d;
+        font-weight:700;
+        font-size:13px;
+      "
+    >
+      Find Ledger by Date
+    </label>
+
+    <input
+      id="wogeDailyDateFilter"
+      type="date"
+      style="
+        min-width:170px;
+        padding:9px 11px;
+        border-radius:8px;
+        border:1px solid #6e571f;
+        background:#080808;
+        color:#f4e4aa;
+      "
+    >
+
+    <button
+      type="button"
+      id="wogeDailyDateClear"
+      style="
+        padding:9px 13px;
+        border-radius:8px;
+        border:1px solid #6e571f;
+        background:#1c1c1c;
+        color:#d7b34d;
+        cursor:pointer;
+      "
+    >
+      Clear Date
+    </button>
+  `;
+
+  list.parentNode.insertBefore(
+    bar,
+    list
+  );
+
+  const input =
+    document.getElementById(
+      "wogeDailyDateFilter"
+    );
+
+  const clear =
+    document.getElementById(
+      "wogeDailyDateClear"
+    );
+
+  input?.addEventListener(
+    "change",
+    () => renderDailyLedgers()
+  );
+
+  clear?.addEventListener(
+    "click",
+    () => {
+      if (input) input.value = "";
+      renderDailyLedgers();
+    }
+  );
+
+}
+
+/* =========================================================
+   KEEP ACTIVE LEDGER ID
+========================================================= */
+
+const originalOpenLedgerDetails =
+  openLedgerDetails;
+
+window.WOGE_ACTIVE_LEDGER_ID =
+  null;
+
+openLedgerDetails = function(ledgerId) {
+
+  window.WOGE_ACTIVE_LEDGER_ID =
+    ledgerId;
+
+  return originalOpenLedgerDetails(
+    ledgerId
+  );
+};
+
+const originalCloseLedgerViewer =
+  closeLedgerViewer;
+
+closeLedgerViewer = function() {
+
+  window.WOGE_ACTIVE_LEDGER_ID =
+    null;
+
+  return originalCloseLedgerViewer();
+};
+
+/* =========================================================
+   CLOUD REFRESH WHEN RETURNING TO APP
+========================================================= */
+
+document.addEventListener(
+  "visibilitychange",
+  function() {
+
+    if (
+      document.visibilityState ===
+      "visible" &&
+      wogeCloudAvailable
+    ) {
+
+      refreshFromCloud();
+
+    }
+
+  }
+);
+
+/* Check periodically so the office computer can see home-PC changes. */
+
+setInterval(
+  function() {
+
+    if (
+      document.visibilityState ===
+      "visible" &&
+      wogeCloudAvailable
+    ) {
+
+      refreshFromCloud();
+
+    }
+
+  },
+  60000
+);
+
+/* =========================================================
+   INITIAL CLOUD START
+========================================================= */
+
+setTimeout(
+  function() {
+    initializeCloudSync();
+  },
+  500
+);
+
+/* =========================================================
    DEBUG / VERSION
 ========================================================= */
 
 console.log(
-  "WOGE Ledger v3.0 loaded successfully."
+  "WOGE Ledger v3.1 — Cloud Sync loaded successfully."
 );
